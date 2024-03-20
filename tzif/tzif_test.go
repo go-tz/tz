@@ -215,22 +215,22 @@ func TestV1FileRepresentingUTCWithLeapSeconds(t *testing.T) {
 	}
 
 	// Check that we can decode the file we just encoded.
-	f, err := DecodeFile(bytes.NewReader(want))
+	f, err := DecodeData(bytes.NewReader(want))
 	if err != nil {
-		t.Fatalf("DecodeFile() failed: %v", err)
+		t.Fatalf("DecodeData() failed: %v", err)
 	}
 	if diff := cmp.Diff(f.V1Header, header); diff != "" {
-		t.Errorf("DecodeFile() V1Header mismatch (-got +want):\n%s", diff)
+		t.Errorf("DecodeData() V1Header mismatch (-got +want):\n%s", diff)
 	}
 	if diff := cmp.Diff(f.V1Data, block); diff != "" {
-		t.Errorf("DecodeFile() V1Block mismatch (-got +want):\n%s", diff)
+		t.Errorf("DecodeData() V1Block mismatch (-got +want):\n%s", diff)
 	}
 }
 
 func TestV2FileRepresentingPacificHonululu(t *testing.T) {
 	// This is the example B.2. from RFC 8536.
 	v1Header := Header{
-		Version:  V1,
+		Version:  V2,
 		Isutcnt:  6,
 		Isstdcnt: 6,
 		Leapcnt:  0,
@@ -337,7 +337,7 @@ func TestV2FileRepresentingPacificHonululu(t *testing.T) {
 	want := []byte{
 		// v1 header
 		0x54, 0x5a, 0x69, 0x66, // magic
-		0x00, // version // TODO: report bug
+		0x32, // version
 		0x00, 0x00, 0x00, 0x00,
 		0x00, 0x00, 0x00, 0x00,
 		0x00, 0x00, 0x00, 0x00,
@@ -491,31 +491,31 @@ func TestV2FileRepresentingPacificHonululu(t *testing.T) {
 	}
 
 	// Check that we can decode the file we just encoded.
-	f, err := DecodeFile(bytes.NewReader(want))
+	f, err := DecodeData(bytes.NewReader(want))
 	if err != nil {
-		t.Fatalf("DecodeFile() failed: %v", err)
+		t.Fatalf("DecodeData() failed: %v", err)
 	}
 	if diff := cmp.Diff(f.V1Header, v1Header); diff != "" {
-		t.Errorf("DecodeFile() V1Header mismatch (-got +want):\n%s", diff)
+		t.Errorf("DecodeData() V1Header mismatch (-got +want):\n%s", diff)
 	}
 	if diff := cmp.Diff(f.V1Data, v1Block); diff != "" {
-		t.Errorf("DecodeFile() V1Block mismatch (-got +want):\n%s", diff)
+		t.Errorf("DecodeData() V1Block mismatch (-got +want):\n%s", diff)
 	}
 	if diff := cmp.Diff(f.V2Header, v2Header); diff != "" {
-		t.Errorf("DecodeFile() V2Header mismatch (-got +want):\n%s", diff)
+		t.Errorf("DecodeData() V2Header mismatch (-got +want):\n%s", diff)
 	}
 	if diff := cmp.Diff(f.V2Data, v2Block); diff != "" {
-		t.Errorf("DecodeFile() V2Block mismatch (-got +want):\n%s", diff)
+		t.Errorf("DecodeData() V2Block mismatch (-got +want):\n%s", diff)
 	}
 	if diff := cmp.Diff(f.V2Footer, v2Footer); diff != "" {
-		t.Errorf("DecodeFile() Footer mismatch (-got +want):\n%s", diff)
+		t.Errorf("DecodeData() Footer mismatch (-got +want):\n%s", diff)
 	}
 }
 
 func TestV3FileRepresentingAsiaJerusalem(t *testing.T) {
 	// This is the example B.3. from RFC 8536.
 	v1Header := Header{
-		Version:  V1,
+		Version:  V3,
 		Isutcnt:  0,
 		Isstdcnt: 0,
 		Leapcnt:  0,
@@ -564,7 +564,7 @@ func TestV3FileRepresentingAsiaJerusalem(t *testing.T) {
 	want := []byte{
 		// v1 header
 		0x54, 0x5a, 0x69, 0x66, // magic
-		0x00, // version // TODO: report bug
+		0x33, // version
 		0x00, 0x00, 0x00, 0x00,
 		0x00, 0x00, 0x00, 0x00,
 		0x00, 0x00, 0x00, 0x00,
@@ -615,21 +615,21 @@ func TestV3FileRepresentingAsiaJerusalem(t *testing.T) {
 	}
 
 	// Check that we can decode the file we just encoded.
-	f, err := DecodeFile(bytes.NewReader(want))
+	f, err := DecodeData(bytes.NewReader(want))
 	if err != nil {
-		t.Fatalf("DecodeFile() failed: %v", err)
+		t.Fatalf("DecodeData() failed: %v", err)
 	}
 	if diff := cmp.Diff(f.V1Header, v1Header); diff != "" {
-		t.Errorf("DecodeFile() V1Header mismatch (-got +want):\n%s", diff)
+		t.Errorf("DecodeData() V1Header mismatch (-got +want):\n%s", diff)
 	}
 	if diff := cmp.Diff(f.V2Header, v3Header); diff != "" {
-		t.Errorf("DecodeFile() V2Header mismatch (-got +want):\n%s", diff)
+		t.Errorf("DecodeData() V2Header mismatch (-got +want):\n%s", diff)
 	}
 	if diff := cmp.Diff(f.V2Data, v3Block); diff != "" {
-		t.Errorf("DecodeFile() V2Block mismatch (-got +want):\n%s", diff)
+		t.Errorf("DecodeData() V2Block mismatch (-got +want):\n%s", diff)
 	}
 	if diff := cmp.Diff(f.V2Footer, v3Footer); diff != "" {
-		t.Errorf("DecodeFile() Footer mismatch (-got +want):\n%s", diff)
+		t.Errorf("DecodeData() Footer mismatch (-got +want):\n%s", diff)
 	}
 }
 
@@ -753,7 +753,7 @@ func TestReadFooter(t *testing.T) {
 	}
 }
 
-func TestFile_Encode_V1(t *testing.T) {
+func TestData_Encode_V1(t *testing.T) {
 	v1h := Header{
 		Version:  V1,
 		Isutcnt:  2,
@@ -779,7 +779,7 @@ func TestFile_Encode_V1(t *testing.T) {
 		StandardWallIndicators: []bool{true, false},
 	}
 
-	f := File{
+	f := Data{
 		V1Header: v1h,
 		V1Data:   v1b,
 	}
@@ -809,7 +809,7 @@ func TestFile_Encode_V1(t *testing.T) {
 		t.Errorf("buffer not empty: %d", buf.Len())
 	}
 
-	gotF, err := DecodeFile(decodeBuf)
+	gotF, err := DecodeData(decodeBuf)
 	if err != nil {
 		t.Fatalf("decode: %v", err)
 	}
@@ -818,9 +818,9 @@ func TestFile_Encode_V1(t *testing.T) {
 	}
 }
 
-func TestFile_Encode_V2(t *testing.T) {
+func TestData_Encode_V2(t *testing.T) {
 	v1h := Header{
-		Version:  V1,
+		Version:  V2,
 		Isutcnt:  2,
 		Isstdcnt: 2,
 		Leapcnt:  2,
@@ -871,7 +871,7 @@ func TestFile_Encode_V2(t *testing.T) {
 		TZString: []byte("TZ"),
 	}
 
-	f := File{
+	f := Data{
 		Version:  V2,
 		V1Header: v1h,
 		V1Data:   v1b,
@@ -929,86 +929,7 @@ func TestFile_Encode_V2(t *testing.T) {
 		t.Errorf("buffer not empty: %d", buf.Len())
 	}
 
-	gotF, err := DecodeFile(decodeBuf)
-	if err != nil {
-		t.Fatalf("decode: %v", err)
-	}
-	if diff := cmp.Diff(gotF, f); diff != "" {
-		t.Errorf("decode mismatch (-got +want):\n%s", diff)
-	}
-}
-
-func TestFile_V2WithV1Missing(t *testing.T) {
-	v2h := Header{
-		Version:  V2,
-		Isutcnt:  2,
-		Isstdcnt: 2,
-		Leapcnt:  2,
-		Timecnt:  2,
-		Typecnt:  2,
-		Charcnt:  6,
-	}
-	v2b := V2DataBlock{
-		TransitionTimes: []int64{1, 2},
-		TransitionTypes: []uint8{3, 4},
-		LocalTimeTypeRecord: []LocalTimeTypeRecord{
-			{Utoff: 5, Dst: true, Idx: 6},
-			{Utoff: 7, Dst: false, Idx: 8},
-		},
-		LeapSecondRecords: []V2LeapSecondRecord{
-			{Occur: 9, Corr: 10},
-			{Occur: 11, Corr: 12},
-		},
-		TimeZoneDesignation:    []byte("TZ\x00ZT\x00"),
-		UTLocalIndicators:      []bool{true, false},
-		StandardWallIndicators: []bool{true, false},
-	}
-	v2f := Footer{
-		TZString: []byte("TZ"),
-	}
-
-	f := File{
-		Version:   V2,
-		V1Missing: true,
-		V2Header:  v2h,
-		V2Data:    v2b,
-		V2Footer:  v2f,
-	}
-	var buf bytes.Buffer
-	if err := f.Encode(&buf); err != nil {
-		t.Fatalf("encode: %v", err)
-	}
-	decodeBuf := bytes.NewBuffer(buf.Bytes()) // copy for decode test
-
-	gotH2, err := ReadHeader(&buf)
-	if err != nil {
-		t.Errorf("read v2 header: %v", err)
-	}
-	if diff := cmp.Diff(gotH2, v2h); diff != "" {
-		t.Errorf("v2 header mismatch (-got +want):\n%s", diff)
-	}
-
-	gotD2, err := ReadV2DataBlock(&buf, gotH2)
-	if err != nil {
-		t.Errorf("read v2 block: %v", err)
-	}
-	if diff := cmp.Diff(gotD2, v2b); diff != "" {
-		t.Errorf("v2 block mismatch (-got +want):\n%s", diff)
-	}
-
-	gotF2, err := ReadFooter(&buf)
-	if err != nil {
-		t.Errorf("read footer: %v", err)
-	}
-	if diff := cmp.Diff(gotF2, v2f); diff != "" {
-		t.Errorf("footer mismatch (-got +want):\n%s", diff)
-	}
-
-	if buf.Len() != 0 {
-		t.Errorf("buffer not empty: %d", buf.Len())
-	}
-
-	gotF, err := DecodeFile(decodeBuf)
+	gotF, err := DecodeData(decodeBuf)
 	if err != nil {
 		t.Fatalf("decode: %v", err)
 	}

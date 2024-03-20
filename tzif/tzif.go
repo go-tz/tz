@@ -254,10 +254,6 @@ func (b V1DataBlock) Write(w io.Writer) error {
 }
 
 func ReadV1DataBlock(r io.Reader, h Header) (V1DataBlock, error) {
-	if h.Version != V1 {
-		return V1DataBlock{}, fmt.Errorf("invalid header version: %v", h.Version)
-	}
-
 	var b V1DataBlock
 	if h.Timecnt > 0 {
 		b.TransitionTimes = make([]int32, h.Timecnt)
