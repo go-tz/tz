@@ -1,5 +1,6 @@
 // Package tzif implements the TZif file format according to RFC8536.
 // https://datatracker.ietf.org/doc/html/rfc8536
+// Most comments in this package are copied from the RFC.
 package tzif
 
 import (
