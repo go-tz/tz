@@ -15,6 +15,10 @@ import (
 // using two's complement.
 var order = binary.BigEndian
 
+// Version represents the version of a TZif file.
+// The version is an octet identifying the version of the file's format.
+// In V1, time values are 32bit (four-octets) and in V2 upwards time values are 64bit (eight-octets).
+// Therefore, V1DataBlock is only used by V1 and V2DataBlock is used by V2, V3 and V4.
 type Version byte
 
 func (v Version) String() string {
@@ -25,6 +29,8 @@ func (v Version) String() string {
 		return "V2 (0x32)"
 	case V3:
 		return "V3 (0x33)"
+	case V4:
+		return "V4 (0x34)"
 	default:
 		return fmt.Sprintf("<undefined version (%d)>", v)
 	}
@@ -56,6 +62,22 @@ const (
 	// encoding, except that it MAY use the TZ string extensions
 	// described in Section 3.3.1 of RFC8536.
 	V3 Version = 0x33 // '3'
+	// V4 represents a version 4 TZif file.
+	// It is not specified in RFC8536 as of Feb 2019, but is specified in the tzfile(5) man page.
+	//
+	// The man page says:
+	//
+	//  For version-4-format TZif files, the first leap second record can
+	//  have a correction that is neither +1 nor -1, to represent
+	//  truncation of the TZif file at the start.  Also, if two or more
+	//  leap second transitions are present and the last entry's
+	//  correction equals the previous one, the last entry denotes the
+	//  expiration of the leap second table instead of a leap second;
+	//  timestamps after this expiration are unreliable in that future
+	//  releases will likely add leap second entries after the
+	//  expiration, and the added leap seconds will change how post-
+	//  expiration timestamps are treated.
+	V4 Version = 0x34 // '4'
 )
 
 // Magic is the four-octet ASCII sequence "TZif" (0x54 0x5A 0x69 0x66),
@@ -343,6 +365,8 @@ func (r V1LeapSecondRecord) Write(w io.Writer) error {
 }
 
 // V2DataBlock is the data block of a version 2+ TZif file.
+// V2, V3 and V4 files all use the V2DataBlock as the only difference
+// to V1 is the size of time values.
 // The data block is structured as follows with TIME_SIZE being 8:
 //
 //	+---------------------------------------------------------+
@@ -461,7 +485,7 @@ func (b V2DataBlock) Write(w io.Writer) error {
 }
 
 func ReadV2DataBlock(r io.Reader, h Header) (V2DataBlock, error) {
-	if h.Version != V2 && h.Version != V3 {
+	if h.Version < V2 {
 		return V2DataBlock{}, fmt.Errorf("invalid header version: %v", h.Version)
 	}
 
