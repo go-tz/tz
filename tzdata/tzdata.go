@@ -1,3 +1,5 @@
+// Package tzdata provides a parser for the tzdata and leapsecond files provided by IANA
+// at https://www.iana.org/time-zones.
 package tzdata
 
 import (
@@ -141,7 +143,7 @@ func Parse(r io.Reader) (Result, error) {
 type LeapCorr string
 
 const (
-	// LeadAdded means a second was added.
+	// LeapAdded means a second was added.
 	LeapAdded LeapCorr = "+"
 	// LeapSkipped means a second was skipped.
 	LeapSkipped LeapCorr = "-"
