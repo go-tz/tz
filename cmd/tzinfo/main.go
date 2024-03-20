@@ -14,7 +14,7 @@ func main() {
 	flag.Parse()
 	args := flag.Args()
 	if len(args) != 1 {
-		fmt.Println("Usage: tzinspect <tzif file>")
+		fmt.Println("Usage: tzinfo <tzif file>")
 		os.Exit(1)
 	}
 	b, err := os.ReadFile(args[0])
