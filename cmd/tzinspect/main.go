@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"zic/tzif"
 )
 
@@ -29,14 +30,21 @@ func main() {
 		os.Exit(1)
 	}
 
-	printHeader(data.V1Header)
-	printV1DataBlock(data.V1Data)
-	if data.Version > tzif.V1 {
-		printHeader(data.V2Header)
-		printV2DataBlock(data.V2Data)
-		fmt.Println("Footer", string(data.V2Footer.TZString))
-	}
+	printData(data)
 	printRest(r)
+}
+
+func printData(d tzif.Data) {
+	printV1(d.V1Header, d.V1Data)
+	if d.Version > tzif.V1 {
+		printV2(d.V2Header, d.V2Data, d.V2Footer)
+	}
+}
+
+func printFooter(f tzif.Footer) {
+	fmt.Println("Footer")
+	fmt.Println("  TZString =", string(f.TZString))
+	fmt.Println()
 }
 
 func printRest(r *bytes.Reader) {
@@ -53,36 +61,43 @@ func printRest(r *bytes.Reader) {
 }
 
 func printHeader(h tzif.Header) {
-	fmt.Println("Header", h.Version)
-	fmt.Println("  Isutcnt", h.Isutcnt)
-	fmt.Println("  Isutcnt", h.Isutcnt)
-	fmt.Println("  Leapcnt", h.Leapcnt)
-	fmt.Println("  Timecnt", h.Timecnt)
-	fmt.Println("  Typecnt", h.Typecnt)
-	fmt.Println("  Charcnt", h.Charcnt)
+	fmt.Println("Header")
+	fmt.Println("  version =", h.Version)
+	fmt.Println("  isutcnt =", h.Isutcnt)
+	fmt.Println("  isutcnt =", h.Isutcnt)
+	fmt.Println("  leapcnt =", h.Leapcnt)
+	fmt.Println("  timecnt =", h.Timecnt)
+	fmt.Println("  typecnt =", h.Typecnt)
+	fmt.Println("  charcnt =", h.Charcnt)
 	fmt.Println()
 }
 
-func printV1DataBlock(b tzif.V1DataBlock) {
+func printV1(h tzif.Header, b tzif.V1DataBlock) {
+	printHeader(h)
+
 	fmt.Println("Data block", tzif.V1)
-	fmt.Println("  TransitionTimes: ", len(b.TransitionTimes))
-	fmt.Println("  TransitionTypes: ", len(b.TransitionTypes))
-	fmt.Println("  LocalTimeTypeRecord: ", len(b.LocalTimeTypeRecord))
-	fmt.Println(" ", len(b.TimeZoneDesignation), "TimeZoneDesignation:", string(b.TimeZoneDesignation))
-	fmt.Println("  LeapSecondRecords: ", len(b.LeapSecondRecords))
-	fmt.Println("  StandardWallIndicators: ", len(b.StandardWallIndicators))
-	fmt.Println("  UTLocalIndicators: ", len(b.UTLocalIndicators))
+	fmt.Printf("  TransitionTimes (%d) = %v\n", len(b.TransitionTimes), b.TransitionTimes)
+	fmt.Printf("  TransitionTypes (%d) = %v\n", len(b.TransitionTypes), b.TransitionTypes)
+	fmt.Printf("  LocalTimeTypeRecord (%d) = %+v\n", len(b.LocalTimeTypeRecord), b.LocalTimeTypeRecord)
+	fmt.Printf("  TimeZoneDesignation (%d) = %v\n", len(b.TimeZoneDesignation), strings.Split(string(b.TimeZoneDesignation), "\x00"))
+	fmt.Printf("  LeapSecondRecords (%d) = %+v\n", len(b.LeapSecondRecords), b.LeapSecondRecords)
+	fmt.Printf("  StandardWallIndicators (%d) = %v\n", len(b.StandardWallIndicators), b.StandardWallIndicators)
+	fmt.Printf("  UTLocalIndicators (%d) = %v\n", len(b.UTLocalIndicators), b.UTLocalIndicators)
 	fmt.Println()
 }
 
-func printV2DataBlock(b tzif.V2DataBlock) {
-	fmt.Println("Data block", tzif.V2)
-	fmt.Println("  TransitionTimes: ", len(b.TransitionTimes))
-	fmt.Println("  TransitionTypes: ", len(b.TransitionTypes))
-	fmt.Println("  LocalTimeTypeRecord: ", len(b.LocalTimeTypeRecord))
-	fmt.Println(" ", len(b.TimeZoneDesignation), "TimeZoneDesignation:", string(b.TimeZoneDesignation))
-	fmt.Println("  LeapSecondRecords: ", len(b.LeapSecondRecords))
-	fmt.Println("  StandardWallIndicators: ", len(b.StandardWallIndicators))
-	fmt.Println("  UTLocalIndicators: ", len(b.UTLocalIndicators))
+func printV2(h tzif.Header, b tzif.V2DataBlock, f tzif.Footer) {
+	printHeader(h)
+
+	fmt.Println("Data block", h.Version)
+	fmt.Printf("  TransitionTimes (%d) = %v\n", len(b.TransitionTimes), b.TransitionTimes)
+	fmt.Printf("  TransitionTypes (%d) = %v\n", len(b.TransitionTypes), b.TransitionTypes)
+	fmt.Printf("  LocalTimeTypeRecord (%d) = %+v\n", len(b.LocalTimeTypeRecord), b.LocalTimeTypeRecord)
+	fmt.Printf("  TimeZoneDesignation (%d) = %v\n", len(b.TimeZoneDesignation), strings.Split(string(b.TimeZoneDesignation), "\x00"))
+	fmt.Printf("  LeapSecondRecords (%d) = %+v\n", len(b.LeapSecondRecords), b.LeapSecondRecords)
+	fmt.Printf("  StandardWallIndicators (%d) = %v\n", len(b.StandardWallIndicators), b.StandardWallIndicators)
+	fmt.Printf("  UTLocalIndicators (%d) = %v\n", len(b.UTLocalIndicators), b.UTLocalIndicators)
 	fmt.Println()
+
+	printFooter(f)
 }
