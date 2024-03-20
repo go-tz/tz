@@ -1,4 +1,4 @@
-module zic
+module github.com/ngrash/go-tz
 
 go 1.22
 

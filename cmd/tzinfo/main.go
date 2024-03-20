@@ -7,7 +7,8 @@ import (
 	"io"
 	"os"
 	"strings"
-	"zic/tzif"
+
+	"github.com/ngrash/go-tz/tzif"
 )
 
 func main() {
