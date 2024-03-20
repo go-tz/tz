@@ -34,7 +34,7 @@ Link    Europe/Zurich  Europe/Vaduz
 		t.Fatal(err)
 	}
 
-	want := Result{
+	want := File{
 		RuleLines: []RuleLine{
 			{Name: "Swiss", From: 1941, To: 1942, In: time.May, On: Day{Form: DayFormAfter, Day: time.Monday, Num: 1}, At: Time{Duration: 1 * time.Hour, Form: WallClock}, Save: Time{Duration: 1 * time.Hour, Form: DaylightSavingTime}, Letter: "S"},
 			{Name: "Swiss", From: 1941, To: 1942, In: time.October, On: Day{Form: DayFormAfter, Day: time.Monday, Num: 1}, At: Time{Duration: 2 * time.Hour, Form: WallClock}, Save: Time{Duration: 0, Form: StandardTime}, Letter: ""},
@@ -70,7 +70,7 @@ Expires  2020  Dec    28   00:00:00
 		t.Fatal(err)
 	}
 
-	want := Result{
+	want := File{
 		LeapLines: []LeapLine{
 			{Year: 2016, Month: time.December, Day: 31, Time: HMS{23, 59, 60}, Corr: LeapAdded, Mode: StationaryLeapTime},
 		},

@@ -13,12 +13,12 @@ import (
 	"time"
 )
 
-// Result represents the result of parsing a tzdata or leapsecond file.
+// File represents the result of parsing a tzdata or leapsecond file.
 // It contains the parsed zone lines, rule lines, and link lines, each in the order they appear in the file.
 // It also contains the parsed leap lines and expires lines, if the file is a leapsecond file.
 // The data structure is shared between the two file types, but the leap lines and expires lines are only
 // present in leapsecond files while the zone lines, rule lines, and link lines are only present in tzdata files.
-type Result struct {
+type File struct {
 	ZoneLines    []ZoneLine
 	RuleLines    []RuleLine
 	LinkLines    []LinkLine
@@ -69,9 +69,9 @@ func expiresParseError(lineNumber int, line string, err error) error {
 	return &parseError{lineNumber, line, fmt.Errorf("parse expires: %w", err)}
 }
 
-// Parse parses the content of tzdata file and returns a Result struct containing the parsed lines.
-func Parse(r io.Reader) (Result, error) {
-	var result Result
+// Parse parses the content of tzdata file and returns a File struct containing the parsed lines.
+func Parse(r io.Reader) (File, error) {
+	var result File
 	scanner := bufio.NewScanner(r)
 
 	var (
