@@ -11,6 +11,10 @@ import (
 	"github.com/ngrash/go-tz/tzif"
 )
 
+var (
+	printV1Flag          = flag.Bool("v1", false, "Always print v1 header and data")
+)
+
 func main() {
 	flag.Parse()
 	args := flag.Args()
@@ -36,7 +40,9 @@ func main() {
 }
 
 func printData(d tzif.Data) {
-	printV1(d.V1Header, d.V1Data)
+	if d.Version == tzif.V1 || *printV1Flag {
+		printV1(d.V1Header, d.V1Data)
+	}
 	if d.Version > tzif.V1 {
 		printV2(d.V2Header, d.V2Data, d.V2Footer)
 	}
