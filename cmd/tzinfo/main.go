@@ -7,12 +7,14 @@ import (
 	"io"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/ngrash/go-tz/tzif"
 )
 
 var (
 	printV1Flag          = flag.Bool("v1", false, "Always print v1 header and data")
+	printTransitionsFlag = flag.Bool("t", false, "Print transitions in human readable format")
 )
 
 func main() {
@@ -106,5 +108,44 @@ func printV2(h tzif.Header, b tzif.V2DataBlock, f tzif.Footer) {
 	fmt.Printf("  UTLocalIndicators (%d) = %v\n", len(b.UTLocalIndicators), b.UTLocalIndicators)
 	fmt.Println()
 
+	if *printTransitionsFlag {
+		printTransitions(b)
+	}
+
 	printFooter(f)
+}
+
+func printTransitions(b tzif.V2DataBlock) {
+	fmt.Printf("Transitions (initial record: %s)\n", formatTimeRecord(b, 0))
+	for i, tt := range b.TransitionTimes {
+		fmt.Printf("  %s (%d)", formatTransitionTime(tt), tt)
+		fmt.Printf(" => ")
+		fmt.Printf("%s\n", formatTimeRecord(b, b.TransitionTypes[i]))
+	}
+	fmt.Println()
+}
+
+func formatTransitionTime(tt int64) string {
+	return time.Unix(tt, 0).UTC().Format(time.RFC1123)
+}
+
+func formatTimeRecord(b tzif.V2DataBlock, idx uint8) string {
+	r := b.LocalTimeTypeRecord[idx]
+	var dst string
+	if r.Dst {
+		dst = ", dst"
+	}
+	desig := readDesign(b.TimeZoneDesignation, r.Idx)
+	return fmt.Sprintf("%s: %s (%d)%s", desig, time.Duration(r.Utoff)*time.Second, r.Utoff, dst)
+}
+
+func readDesign(d []byte, idx uint8) string {
+	var desig string
+	for _, b := range d[idx:] {
+		if b == 0 {
+			break
+		}
+		desig += string(b)
+	}
+	return desig
 }
