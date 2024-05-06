@@ -21,7 +21,7 @@ func run() error {
 	flag.Parse()
 	args := flag.Args()
 	if len(args) != 2 {
-		return fmt.Errorf("Usage: tzdiff <tzdata file A> <tzdata file B>\n")
+		return fmt.Errorf("Usage: tzdiff <tzif file A> <tzif file B>\n")
 	}
 
 	af, err := os.ReadFile(args[0])
