@@ -1,0 +1,11 @@
+# Zone	NAME		STDOFF	RULES	FORMAT	[UNTIL]
+Zone	t		2:00	-	LMT	1980
+			3:00    1:00    ILD	1985
+			1:00	r	TT%s
+
+# Rule	NAME	FROM	TO	-	IN	ON	AT	SAVE	LETTER/S
+Rule	r	1980	only	-	jan	1	0:00	0:30s	0
+Rule	r	1990	only	-	jan	1	0:00	1:00	A
+Rule	r	1991	only	-	mar	1	0:00	2:00s	B
+Rule	r	1992	only	-	feb	1	0:00	2:00	C
+Rule	r	1993	only	-	mar	1	0:00	0:00	D
