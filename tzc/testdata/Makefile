@@ -2,19 +2,18 @@
 SOURCES := $(wildcard *.tzdata)
 
 # Generate target names by stripping the .tzdata extension and appending _tzif
-TARGETS := $(SOURCES:%.tzdata=%_tzif)
+TARGETS := $(SOURCES:%.tzdata=generated_tzif/%)
 
 # Default target
 all: $(TARGETS)
 
 # Rule to process each file
-$(TARGETS): %_tzif : %.tzdata
-	rm -rf $@
+$(TARGETS): generated_tzif/% : %.tzdata
 	zic $< -b fat -d $@
 
 # Clean target to remove the directories
 clean:
-	rm -rf *_tzif
+	rm -rf generated_tzif/*
 
 # Phony targets to avoid conflicts with existing directories
 .PHONY: all clean

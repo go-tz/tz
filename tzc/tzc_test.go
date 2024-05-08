@@ -8,6 +8,7 @@ import (
 	"github.com/ngrash/go-tz/tzif"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -22,32 +23,38 @@ func loadTestCases(t *testing.T) []testCase {
 
 	var cases []testCase
 
-	dataFiles, err := filepath.Glob("testdata/*.tzdata")
+	inputFiles, err := filepath.Glob("testdata/*.tzdata")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	for _, dataFile := range dataFiles {
-		content, err := os.ReadFile(dataFile)
+	for _, in := range inputFiles {
+		content, err := os.ReadFile(in)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		name := dataFile[:len(dataFile)-len(".tzdata")]
-		cases = append(cases, testCase{Name: name, Input: content, Want: map[string][]byte{}})
+		// Extract the name of the zone from the file name; testdata/my_example.tzdata -> my_example
+		name := strings.TrimSuffix(filepath.Base(in), ".tzdata")
+		tc := testCase{Name: name, Input: content, Want: map[string][]byte{}}
 
-		ifFiles, err := filepath.Glob(fmt.Sprintf("%s_tzif/*", name))
+		ifFiles, err := filepath.Glob(fmt.Sprintf("testdata/generated_tzif/%s/*", name))
 		if err != nil {
 			t.Fatal(err)
+		}
+		if len(ifFiles) == 0 {
+			t.Fatalf("No tzif files found for %s. Did `make` fail?", name)
 		}
 
 		for _, ifFile := range ifFiles {
-			content, err := os.ReadFile(ifFile)
+			c, err := os.ReadFile(ifFile)
 			if err != nil {
 				t.Fatal(err)
 			}
-			cases[len(cases)-1].Want[ifFile[len(name)+1+len("_tzif"):]] = content
+			s := filepath.Base(ifFile)
+			tc.Want[s] = c
 		}
+		cases = append(cases, tc)
 	}
 
 	return cases
