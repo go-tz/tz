@@ -14,7 +14,7 @@ $(TARGETS): %_tzif : %.tzdata
 
 # Clean target to remove the directories
 clean:
-	rm -rf $(TARGETS)
+	rm -rf *_tzif
 
 # Phony targets to avoid conflicts with existing directories
 .PHONY: all clean
