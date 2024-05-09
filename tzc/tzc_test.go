@@ -23,9 +23,12 @@ func loadTestCases(t *testing.T) []testCase {
 
 	var cases []testCase
 
-	inputFiles, err := filepath.Glob("testdata/*.tzdata")
+	inputFiles, err := filepath.Glob("testdata/tzdata/**/*.tzdata")
 	if err != nil {
 		t.Fatal(err)
+	}
+	if len(inputFiles) == 0 {
+		t.Fatal("no input files found")
 	}
 
 	for _, in := range inputFiles {
@@ -34,11 +37,11 @@ func loadTestCases(t *testing.T) []testCase {
 			t.Fatal(err)
 		}
 
-		// Extract the name of the zone from the file name; testdata/my_example.tzdata -> my_example
-		name := strings.TrimSuffix(filepath.Base(in), ".tzdata")
+		// Extract the name of the zone from the file name; testdata/tzdata/my/example.tzdata -> my/example
+		name := strings.TrimSuffix(strings.TrimPrefix(in, "testdata/tzdata/"), ".tzdata")
 		tc := testCase{Name: name, Input: content, Want: map[string][]byte{}}
 
-		ifFiles, err := filepath.Glob(fmt.Sprintf("testdata/generated_tzif/%s/*", name))
+		ifFiles, err := filepath.Glob(fmt.Sprintf("testdata/tzif/%s/*", name))
 		if err != nil {
 			t.Fatal(err)
 		}
