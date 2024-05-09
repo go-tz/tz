@@ -64,9 +64,11 @@ func TestCompile(t *testing.T) {
 	data := loadTestCases(t)
 	for _, d := range data {
 		t.Run(d.Name, func(t *testing.T) {
+			var failedToCompile bool
 			compiled, err := CompileBytes(d.Input)
 			if err != nil {
-				t.Fatalf("CompileBytes() error: %v", err)
+				failedToCompile = true
+				t.Errorf("CompileBytes() error: %v", err)
 			}
 			for zone, want := range d.Want {
 				t.Run(zone, func(t *testing.T) {
@@ -83,7 +85,7 @@ func TestCompile(t *testing.T) {
 						}
 					} else {
 						// Zone is missing. Keep going and print the diff.
-						t.Errorf("missing zone %s", zone)
+						t.Errorf("CompileBytes() did not generate zone %s", zone)
 					}
 
 					wantData, err := tzif.DecodeData(bytes.NewReader(want))
@@ -91,10 +93,17 @@ func TestCompile(t *testing.T) {
 						t.Fatalf("decode want data: %v", err)
 					}
 
-					// TODO: Implement TZString footer generation. For now, ignore it.
-					opts := cmpopts.IgnoreFields(tzif.Footer{}, "TZString")
+					opts := []cmp.Option{
+						// TODO: Implement TZString footer generation. For now, ignore it.
+						cmpopts.IgnoreFields(tzif.Footer{}, "TZString"),
+					}
 
-					if diff := cmp.Diff(gotData, wantData, opts); diff != "" {
+					if failedToCompile {
+						// If the compilation failed, we don't have any meaningful data to compare.
+						// The V2 header and data is still interesting to see what zic generated.
+						opts = append(opts, cmpopts.IgnoreFields(tzif.Data{}, "Version", "V1Header", "V1Data"))
+					}
+					if diff := cmp.Diff(gotData, wantData, opts...); diff != "" {
 						t.Errorf("tzif mismatch (-got +want):\n%s", diff)
 					}
 				})
