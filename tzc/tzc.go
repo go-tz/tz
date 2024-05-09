@@ -80,7 +80,7 @@ func compileZone(f tzdata.File, lines []tzdata.ZoneLine) (tzif.Data, error) {
 	}
 	data.V2Data.TimeZoneDesignation, ir.Idx = appendDesignation(data.V2Data.TimeZoneDesignation, ird)
 	data.V2Data.LocalTimeTypeRecord = []tzif.LocalTimeTypeRecord{ir}
-	data.V2Data.TransitionTimes, err = transitions(f, lines)
+	data.V2Data.TransitionTimes, err = slimTransitions(f, lines)
 	if err != nil {
 		return data, fmt.Errorf("could not determine transition times: %v", err)
 	}
@@ -103,7 +103,7 @@ func tzString(_ tzif.V2DataBlock) string {
 	return "TZA-1"
 }
 
-func transitions(f tzdata.File, lines []tzdata.ZoneLine) ([]int64, error) {
+func slimTransitions(f tzdata.File, lines []tzdata.ZoneLine) ([]int64, error) {
 	var times []int64
 	var utcOff int64
 	for _, l := range lines {
@@ -137,54 +137,66 @@ func transitions(f tzdata.File, lines []tzdata.ZoneLine) ([]int64, error) {
 }
 
 func initialLTTR(f tzdata.File, lines []tzdata.ZoneLine) (tzif.LocalTimeTypeRecord, string, error) {
-	l := lines[0]
+	// Initial record is defined by first line of the zone as zone lines are specified in chronological orders.
+	z := lines[0]
 
-	if l.Rules.Form == tzdata.ZoneRulesStandard {
+	if z.Rules.Form == tzdata.ZoneRulesStandard {
 		r := tzif.LocalTimeTypeRecord{
-			Utoff: int32(time.Duration(l.Offset) / time.Second),
+			Utoff: int32(time.Duration(z.Offset) / time.Second),
 			Dst:   false,
 			Idx:   0,
 		}
-		return r, l.Format, nil
+		return r, z.Format, nil
 	}
 
-	if l.Rules.Form == tzdata.ZoneRulesTime {
+	if z.Rules.Form == tzdata.ZoneRulesTime {
 		r := tzif.LocalTimeTypeRecord{
-			Utoff: int32(time.Duration(l.Offset)/time.Second) + int32(time.Duration(l.Rules.Time.TimeOfDay)/time.Second),
+			Utoff: int32(time.Duration(z.Offset)/time.Second) + int32(time.Duration(z.Rules.Time.TimeOfDay)/time.Second),
 			Dst:   true,
 			Idx:   0,
 		}
-		return r, l.Format, nil
+		return r, z.Format, nil
 	}
 
-	if l.Rules.Form == tzdata.ZoneRulesName {
-		rules, err := findRules(f.RuleLines, l.Rules.Name)
+	if z.Rules.Form == tzdata.ZoneRulesName {
+		rules, err := findRules(f.RuleLines, z.Rules.Name)
 		if err != nil {
 			return tzif.LocalTimeTypeRecord{}, "", err
 		}
 
 		if len(rules) < 1 {
-			return tzif.LocalTimeTypeRecord{}, "", fmt.Errorf("no rule found with name %s", l.Rules.Name)
+			return tzif.LocalTimeTypeRecord{}, "", fmt.Errorf("no rule found with name %s", z.Rules.Name)
 		}
-		offset := int32(time.Duration(rules[0].Save.TimeOfDay) / time.Second)
+
+		// If no rule matches standard time, use the first rule.
+		r := rules[0]
+		for _, rule := range rules {
+			if rule.Save.Form == tzdata.StandardTime {
+				r = rule
+				break
+			}
+		}
+
 		var dst bool
-		switch rules[0].Save.Form {
-		//case tzdata.UniversalTime:
-		//case tzdata.WallClock:
+		switch r.Save.Form {
 		case tzdata.StandardTime:
 			dst = false
 		case tzdata.DaylightSavingTime:
 			dst = true
 		default:
-			return tzif.LocalTimeTypeRecord{}, "", fmt.Errorf("unsupported save form %s", rules[0].Save.Form)
+			return tzif.LocalTimeTypeRecord{}, "", fmt.Errorf("unsupported save form %s", r.Save.Form)
 		}
 
-		r := tzif.LocalTimeTypeRecord{
-			Utoff: int32(time.Duration(l.Offset)/time.Second) + offset,
+		var (
+			off  = int32(time.Duration(r.Save.TimeOfDay) / time.Second)
+			zOff = int32(time.Duration(z.Offset) / time.Second)
+		)
+		tr := tzif.LocalTimeTypeRecord{
+			Utoff: zOff + off,
 			Dst:   dst,
 			Idx:   0,
 		}
-		return r, l.Format, nil
+		return tr, z.Format, nil
 	}
 
 	return tzif.LocalTimeTypeRecord{}, "", fmt.Errorf("unsupported rule form %s", lines[0].Rules.Form)
