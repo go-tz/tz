@@ -9,7 +9,7 @@ all: $(TARGETS)
 
 # Rule to process each file
 $(TARGETS): generated_tzif/% : %.tzdata
-	zic $< -d $@
+	zic -v $< -d $@
 
 # Clean target to remove the directories
 clean:

@@ -1,3 +1,3 @@
 package testdata
 
-//go:generate make
+//go:generate make clean all
