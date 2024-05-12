@@ -4,9 +4,12 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/ngrash/go-tz/internal/tzexpand"
+	"github.com/ngrash/go-tz/internal/tzir"
 	"github.com/ngrash/go-tz/internal/unixtime"
 	"github.com/ngrash/go-tz/tzdata"
 	"github.com/ngrash/go-tz/tzif"
+	"sort"
+	"strings"
 	"time"
 )
 
@@ -61,6 +64,15 @@ func appendDesignation(designations []byte, desig string) ([]byte, uint8) {
 	return append(designations, append([]byte(desig), 0x00)...), uint8(len(designations))
 }
 
+func appendRecord(records []tzif.LocalTimeTypeRecord, r tzif.LocalTimeTypeRecord) ([]tzif.LocalTimeTypeRecord, uint8) {
+	for i, rec := range records {
+		if rec == r {
+			return records, uint8(i)
+		}
+	}
+	return append(records, r), uint8(len(records))
+}
+
 func compileZone(f tzdata.File, lines []tzdata.ZoneLine) (tzif.Data, error) {
 	var data tzif.Data
 	data.Version = tzif.V2
@@ -74,18 +86,40 @@ func compileZone(f tzdata.File, lines []tzdata.ZoneLine) (tzif.Data, error) {
 	data.V1Data.LocalTimeTypeRecord = []tzif.LocalTimeTypeRecord{{Utoff: 0, Dst: false, Idx: 0}}
 	data.V1Data.TimeZoneDesignation = []byte{0x00}
 
+	_, err := tzir.Process(f, lines)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	b, err := build(f, lines)
+	if err != nil {
+		return data, fmt.Errorf("building zone: %v", err)
+	}
+	for _, t := range b.trans {
+		var tr tzif.LocalTimeTypeRecord
+		tr.Dst = t.r.dst
+		tr.Utoff = int32(t.r.save + t.r.zoff)
+
+		data.V2Data.TimeZoneDesignation, tr.Idx = appendDesignation(data.V2Data.TimeZoneDesignation, t.r.desig)
+
+		var transType uint8
+		data.V2Data.LocalTimeTypeRecord, transType = appendRecord(data.V2Data.LocalTimeTypeRecord, tr)
+		data.V2Data.TransitionTypes = append(data.V2Data.TransitionTypes, transType)
+		data.V2Data.TransitionTimes = append(data.V2Data.TransitionTimes, t.t)
+	}
+
 	ir, ird, err := initialLTTR(f, lines)
 	if err != nil {
 		return data, fmt.Errorf("could not identify initial local time type record: %v", err)
 	}
 	data.V2Data.TimeZoneDesignation, ir.Idx = appendDesignation(data.V2Data.TimeZoneDesignation, ird)
-	data.V2Data.LocalTimeTypeRecord = []tzif.LocalTimeTypeRecord{ir}
-	data.V2Data.TransitionTimes, err = slimTransitions(f, lines)
-	if err != nil {
-		return data, fmt.Errorf("could not determine transition times: %v", err)
+	var transType uint8
+	data.V2Data.LocalTimeTypeRecord, transType = appendRecord(data.V2Data.LocalTimeTypeRecord, ir)
+	if len(data.V2Data.TransitionTimes) == 0 {
+		// No transitions defined. Add a dummy transition to the initial record.
+		data.V2Data.TransitionTypes = []uint8{0}
 	}
-	// TODO: Implement transition types. For now, this is only a placeholder to allocate the correct number of bytes in the binary tzif format.
-	data.V2Data.TransitionTypes = make([]uint8, len(data.V2Data.TransitionTimes))
+	_ = transType
 
 	// Update header.
 	data.V2Header.Version = tzif.V2
@@ -100,7 +134,196 @@ func compileZone(f tzdata.File, lines []tzdata.ZoneLine) (tzif.Data, error) {
 }
 
 func tzString(_ tzif.V2DataBlock) string {
-	return "TZA-1"
+	return "TODO"
+}
+
+type builder struct {
+	trans          []transition
+	zoneExpiration int64
+
+	format string
+	zOff   int64
+
+	finalTransitionTime int64
+	finalRecord         *record
+}
+
+type transition struct {
+	t int64
+	r record
+}
+
+type record struct {
+	desig string
+	save  int64
+	zoff  int64 // original zone STDOFF for the zone this record is based on.
+	dst   bool
+}
+
+func build(f tzdata.File, lines []tzdata.ZoneLine) (builder, error) {
+	var b builder
+	for i, z := range lines {
+		if z.Rules.Form != tzdata.ZoneRulesName {
+			// TODO: Currently, we only handle named rules.
+			continue
+		}
+
+		if z.Until.Defined {
+			b.zoneExpiration = zoneExpiration(z)
+		} else {
+			if i == 0 {
+				return b, nil
+			}
+
+			// This Zone has no expiration date.
+			// That means, the expiration of the previous zone is possibly the time of the final transition,
+			// unless Rules defined by the new Zone expire later.
+			b.finalTransitionTime = b.zoneExpiration
+
+			b.zoneExpiration = tzdata.MaxYear
+		}
+		b.format = z.Format
+		b.zOff = int64(time.Duration(z.Offset) / time.Second)
+
+		rules, err := findRules(f.RuleLines, z.Rules.Name)
+		if err != nil {
+			return builder{}, err
+		}
+		for _, r := range rules {
+			var expires bool
+			if r.To == tzdata.MaxYear && !z.Until.Defined {
+				// Neither rule nor zone expires.
+				expires = false
+			} else {
+				expires = true
+			}
+
+			if expires {
+				var expiration int64
+				if r.To == tzdata.MaxYear {
+					expiration = b.zoneExpiration
+				} else {
+					expiration = ruleLastOccurrence(r)
+				}
+				expiration = min(expiration, b.zoneExpiration)
+
+				tr, err := b.expandRule(0, expiration, r)
+				if err != nil {
+					return builder{}, err
+				}
+				b.trans = append(b.trans, tr...)
+			} else {
+				// The final transition goes to the standard time of the last rule.
+				// Unless no standard time is defined, then it goes to the last rule instead.
+				rec := b.record(r)
+				if b.finalRecord == nil || r.Save.Form == tzdata.StandardTime {
+					b.finalRecord = &rec
+				}
+			}
+		}
+	}
+
+	if b.finalRecord != nil {
+		b.trans = append(b.trans, transition{b.finalTransitionTime, *b.finalRecord})
+	}
+
+	// Sort transitions by time.
+	sort.Slice(b.trans, func(i, j int) bool {
+		return b.trans[i].t < b.trans[j].t
+	})
+
+	// Transition times are only corrected for Zone STDOFF during the initial expansion.
+	// In reality, rules influence each other, as the wall clock during a transition is determined by the previous rule.
+	// It is quite hacky to correct the transition times here, but it is the easiest way to get the correct transition times.
+	// I can imagine that there are some edge cases where this is not correct, but it should be good enough for now.
+	var off int64
+	for i, t := range b.trans {
+		if i == 0 {
+			off = t.r.zoff
+		}
+		t.t -= off
+		b.trans[i] = t
+		off = t.r.save + t.r.zoff
+	}
+
+	return b, nil
+}
+
+func (b *builder) expandRule(from, to int64, r tzdata.RuleLine) ([]transition, error) {
+	var tr []transition
+
+	y := int(r.From)
+	for {
+		t := ruleOccurrenceIn(r, y)
+		y++ // next year
+		if t < from {
+			continue // try next year
+		}
+		if t > to {
+			break // done
+		}
+
+		tr = append(tr, transition{t, b.record(r)})
+	}
+
+	return tr, nil
+}
+
+func (b *builder) record(r tzdata.RuleLine) record {
+	dst, err := isDst(r)
+	if err != nil {
+		panic(err)
+	}
+
+	// TODO: This assumes SAVE is local time for now.
+	off := int64(time.Duration(r.Save.TimeOfDay) / time.Second)
+	return record{
+		desig: formatDesignation(b.format, r.Letter),
+		save:  off,
+		zoff:  b.zOff,
+		dst:   dst,
+	}
+}
+
+func formatDesignation(format, letter string) string {
+	if strings.Contains(format, "%s") {
+		return fmt.Sprintf(format, letter)
+	}
+	return format
+}
+
+func isDst(r tzdata.RuleLine) (bool, error) {
+	switch r.Save.Form {
+	case tzdata.StandardTime:
+		return false, nil
+	case tzdata.DaylightSavingTime:
+		return true, nil
+	default:
+		return false, fmt.Errorf("unsupported save form %s", r.Save.Form)
+	}
+}
+
+func zoneExpiration(z tzdata.ZoneLine) int64 {
+	return tzexpand.Earliest(z.Until)
+}
+
+func ruleOccurrenceIn(r tzdata.RuleLine, year int) int64 {
+	y, m, d := tzexpand.DayOfMonth(year, r.In, r.On)
+	hours, minutes, seconds := splitTime(time.Duration(r.At.TimeOfDay))
+	return unixtime.FromDateTime(y, int(m), d, hours, minutes, seconds)
+}
+
+func ruleLastOccurrence(r tzdata.RuleLine) int64 {
+	y, m, d := tzexpand.DayOfMonth(int(r.To), r.In, r.On)
+	hours, minutes, seconds := splitTime(time.Duration(r.At.TimeOfDay))
+	return unixtime.FromDateTime(y, int(m), d, hours, minutes, seconds)
+}
+
+func splitTime(t time.Duration) (int, int, int) {
+	h := int(t / time.Hour)
+	m := int(t / time.Minute)
+	s := int(t / time.Second)
+	return h, m, s
 }
 
 func slimTransitions(f tzdata.File, lines []tzdata.ZoneLine) ([]int64, error) {
@@ -109,28 +332,35 @@ func slimTransitions(f tzdata.File, lines []tzdata.ZoneLine) ([]int64, error) {
 	for _, l := range lines {
 		utcOff = int64(time.Duration(l.Offset) / time.Second)
 
-		if l.Rules.Form == tzdata.ZoneRulesName {
-			rules, err := findRules(f.RuleLines, l.Rules.Name)
-			if err != nil {
-				return nil, err
+		if l.Rules.Form != tzdata.ZoneRulesName {
+			// TODO: Currently, we only handle named rules.
+			continue
+		}
+
+		rules, err := findRules(f.RuleLines, l.Rules.Name)
+		if err != nil {
+			return nil, err
+		}
+		for _, r := range rules {
+			if !(r.From != tzdata.MinYear && r.From != tzdata.MaxYear && r.To == tzdata.MaxYear) {
+				// TODO: This constraint limits us to the most basic rules.
+				return nil, fmt.Errorf("unsupported rule range %d-%d", r.From, r.To)
 			}
-			for _, r := range rules {
-				if !(r.From != tzdata.MinYear && r.From != tzdata.MaxYear && r.To == tzdata.MaxYear) {
-					// TODO: This constraint limits us to the most basic rules.
-					return nil, fmt.Errorf("unsupported rule range %d-%d", r.From, r.To)
-				}
 
-				// TODO: Ignore rules before the previous Zone lines UNTIL date and after this Zone lines UNTIL date.
-				y, m, d := tzexpand.DayOfMonth(int(r.From), r.In, r.On)
+			// TODO: Ignore rules before the previous Zone lines UNTIL date and after this Zone lines UNTIL date.
+			y, m, d := tzexpand.DayOfMonth(int(r.From), r.In, r.On)
 
-				hours := int(time.Duration(r.At.TimeOfDay) / time.Hour)
-				minutes := int(time.Duration(r.At.TimeOfDay) / time.Minute)
-				seconds := int(time.Duration(r.At.TimeOfDay) / time.Second)
+			hours := int(time.Duration(r.At.TimeOfDay) / time.Hour)
+			minutes := int(time.Duration(r.At.TimeOfDay) / time.Minute)
+			seconds := int(time.Duration(r.At.TimeOfDay) / time.Second)
 
-				local := unixtime.FromDateTime(y, int(m), d, hours, minutes, seconds)
-				ut := local - utcOff
-				times = append(times, ut)
-			}
+			local := unixtime.FromDateTime(y, int(m), d, hours, minutes, seconds)
+			ut := local - utcOff
+			times = append(times, ut)
+
+			// TODO: For simple cases, we have only a single transition. We need to figure out the exact condition
+			// if we have more test cases.
+			return times, nil
 		}
 	}
 	return times, nil

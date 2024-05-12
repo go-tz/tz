@@ -1,0 +1,7 @@
+# Zone NAME STDOFF RULES FORMAT [UNTIL]
+Zone   a    1:00   r     TZA
+
+# Rule	NAME	FROM	TO   -	IN	ON       AT    SAVE  LETTER/S
+Rule	r       1990    max  -	feb	1        0:00  0     -
+Rule	r       1990    1994 -	apr	1        0:00  1     -
+Rule	r       1995    max  -	apr	lastSat  0:00  1     -

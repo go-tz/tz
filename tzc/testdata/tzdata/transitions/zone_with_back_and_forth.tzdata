@@ -1,6 +1,0 @@
-# Zone NAME STDOFF RULES FORMAT [UNTIL]
-Zone   a    1:00   r     TZA
-
-# Rule	NAME	FROM	TO   -	IN	ON	AT    SAVE  LETTER/S
-Rule	r       1990    max  -	jan	1	0:00  1     0
-Rule	r       1990    max  -	apr	1	0:00  0	    0

@@ -1,0 +1,11 @@
+# Zone NAME STDOFF RULES FORMAT [UNTIL]
+Zone   a    1:00   r     TZ%s
+
+# Rule	NAME	FROM	TO   -	IN	ON	AT    SAVE  LETTER/S
+# A non-zero SAVE represents DST by default.
+# The later rule is STD, so this DST rule is discarded as candidate for initial time.
+# However, it marks the first transition.
+Rule	r       1990    max  -	jan	1	0:00  1     D
+# A zero SAVE represents STD by default. Because it is the first rule defining STD, it determines the initial time.
+# This means, initial time was UTC + STDOFF (from Zone).
+Rule	r       1990    max  -	apr	1	0:00  0	    S

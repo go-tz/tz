@@ -1,0 +1,10 @@
+# Zone NAME STDOFF RULES FORMAT [UNTIL]
+Zone   a    1:00   r     TZA
+
+# Rule	NAME	FROM	TO   -	IN	ON	AT    SAVE  LETTER/S
+# A zero SAVE represents STD by default.
+# Because this is also the first rule judging by the date it becomes active,
+# it becomes our single transition point.
+# Further transitions are represented by the TZString in the footer.
+Rule	r       1990    max  -	jan	1	0:00  0     -
+Rule	r       1990    max  -	apr	1	0:00  1	    -

@@ -1,0 +1,12 @@
+# Zone NAME STDOFF RULES FORMAT [UNTIL]
+Zone   a    1      x     TX%s   1995
+            2      y     TY%s
+
+# TODO: Try Rule x IN jan 1, this will cause an overlap with Zone expiry and will likely fail.
+# Rule	NAME	FROM	TO   -	IN	ON	AT    SAVE  LETTER/S
+Rule	x       1990    max  -	jan	2	0:00  1     D
+Rule	x       1990    max  -	apr	1	0:00  0	    S
+
+# Rule	NAME	FROM	TO   -	IN	ON	AT    SAVE  LETTER/S
+Rule	y       2000    max  -	feb	2	0:00  0     S
+Rule	y       2000    max  -	may	2	0:00  1	    D
