@@ -2,12 +2,23 @@ package tzexpand
 
 import (
 	"fmt"
+	"github.com/ngrash/go-tz/internal/unixtime"
 	"github.com/ngrash/go-tz/tzdata"
 	"sort"
 	"time"
 )
 
-func Earliest(u tzdata.Until) tzdata.Until {
+func Earliest(u tzdata.Until) int64 {
+	e := earliest(u)
+
+	hours := int(time.Duration(e.Time.TimeOfDay) / time.Hour)
+	minutes := int(time.Duration(e.Time.TimeOfDay) / time.Minute)
+	seconds := int(time.Duration(e.Time.TimeOfDay) / time.Second)
+
+	return unixtime.FromDateTime(e.Year, int(e.Month), e.Day.Num, hours, minutes, seconds)
+}
+
+func earliest(u tzdata.Until) tzdata.Until {
 	// If the UNTIL column is not defined, return the zero value.
 	if !u.Defined {
 		return u

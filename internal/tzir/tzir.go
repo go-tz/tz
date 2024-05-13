@@ -5,146 +5,151 @@ import (
 	"github.com/ngrash/go-tz/internal/tzexpand"
 	"github.com/ngrash/go-tz/internal/unixtime"
 	"github.com/ngrash/go-tz/tzdata"
-	"github.com/ngrash/go-tz/tzif"
 	"sort"
 	"time"
 )
 
-func Process(f tzdata.File, zs []tzdata.ZoneLine) (tzif.Data, error) {
+func Process(f tzdata.File, zs []tzdata.ZoneLine) ([]Zone, error) {
 	var (
-		zones []zone
-		// final transitions to rule lines that never expire.
-		final []transition
+		zones []Zone
 		// activeOffset is the offset to UT that is applied by the current active zone.
 		// Defaults to 0 prior to the first rule.
 		activeOffset int64
 	)
 	for _, z := range zs {
-		if z.Rules.Form != tzdata.ZoneRulesName {
-			continue // TODO
-		}
-
-		rs, err := findRules(f.RuleLines, z.Rules.Name)
+		irz, err := processZone(f, z, activeOffset)
 		if err != nil {
-			return tzif.Data{}, err
-		}
-
-		var irz zone
-		y := firstYear(rs)
-		for {
-			ars := activeRules(rs, y)
-
-			// In the first pass, find occurrences of rules in the current year without any local offsets (the universal time occurrence, utocc).
-			// To find the real occurrence, we need to take into account the rule that is in effect when the transition happens.
-			var transitions []transition
-			for _, r := range ars {
-				utocc := ruleOccurrenceIn(r, y)
-				transitions = append(transitions, transition{
-					utoccy: y,
-					utocc:  utocc,
-					r:      r,
-					off:    ruleOffset(z, r),
-				})
-			}
-
-			// Sort transitions by their occurrence that year. This allows us to calculate the real occurrence dates by applying
-			// the offset of the active rule.
-			sort.Slice(transitions, func(i, j int) bool {
-				return transitions[i].utocc < transitions[j].utocc
-			})
-
-			// Loop through transitions for this year in the order they occur in.
-			// Adjust their occurrences based on the offset of the effective rule.
-			var done bool
-			for i, t := range transitions {
-				// TODO: This could wrap to past year. Do we need to handle that case separately?
-				t.occ = t.utocc - activeOffset
-				transitions[i] = t
-
-				activeOffset = t.off
-
-				// Remember zone's first transition to standard time.
-				if t.r.Save.Form == tzdata.StandardTime && !irz.definesStdTime {
-					irz.firstStdTime = t
-					irz.definesStdTime = true
-				}
-
-				// Check if Zone expires when this rule is applied.
-				if z.Until.Defined {
-					until := tzexpand.Earliest(z.Until)
-					// TODO: the offset calculation works for my current example but I doubt it is correct
-					until = until - activeOffset + z.Offset.Seconds()
-					if expired := t.occ > until; expired {
-						// TODO: Add transition to next zone. There can be no gaps.
-						fmt.Printf("Zone expired: %d (transition needed)\n", until)
-						done = true
-						break
-					}
-				}
-				fmt.Printf("%+v\n", t)
-			}
-			if done {
-				fmt.Println("done")
-				break
-			}
-
-			// TODO: I remember reading something along "if after applying offsets, the effective rule would change ..."
-			// TODO: Maybe worth to check this out and apply rues for this edge case here.
-
-			if validForever(z, ars) {
-				fmt.Printf("valid forever: %d\n", len(ars))
-				final = transitions
-				break // done
-			}
-			y++
-
-			if y == 2030 {
-				return tzif.Data{}, fmt.Errorf("error: y = 3000")
-			}
+			return zones, err
 		}
 		zones = append(zones, irz)
 	}
 
-	// We have rules which are valid indefinitely.
-	if len(final) > 0 {
-		fmt.Println("final")
-		if len(final) > 2 {
-			return tzif.Data{}, fmt.Errorf("cannot handle more than two rules that never expire")
+	return zones, nil
+}
+
+//   - A  zone or continuation line L with a named rule set starts with standard time by
+//     default: that is, any of L's timestamps preceding L's earliest rule use	the
+//     rule in effect after L's first transition into standard time.
+func firstStdTransition(ts []Transition) (Transition, bool) {
+	for _, t := range ts {
+		if t.Rule.Save.Form == tzdata.StandardTime {
+			return t, true
+		}
+	}
+	return Transition{}, false
+}
+
+func processZone(f tzdata.File, z tzdata.ZoneLine, activeOffset int64) (Zone, error) {
+
+	// TODO: I remember reading something along "if after applying offsets, the effective rule would change ..."
+	// TODO: Maybe worth to check this out and apply rues for this edge case here.
+
+	if z.Rules.Form != tzdata.ZoneRulesName {
+		return Zone{}, fmt.Errorf("can only handle zones with named rules")
+	}
+
+	rs, err := findRules(f.RuleLines, z.Rules.Name)
+	if err != nil {
+		return Zone{}, err
+	}
+
+	var irz = Zone{Line: z}
+	y := firstYear(rs)
+	for {
+		ars := activeRules(rs, y)
+
+		transitions, newOffset, zoneExpired, zoneExpiredAt := processZoneYear(z, y, ars, activeOffset)
+		// Update offset for next iteration.
+		activeOffset = newOffset
+
+		irz.Transitions = append(irz.Transitions, transitions...)
+
+		if validForever(z, ars) {
+			// all active transitions are valid forever.
+			// TODO: Check if there are more rules that might become effective in later years.
+			irz.Final = transitions
+			return irz, nil // reached final ruleset
+		} else {
+			if zoneExpired {
+				irz.Expires = true
+				irz.ExpiresAt = zoneExpiredAt
+				return irz, nil // zone expired
+			}
 		}
 
-		for _, t := range final {
-			fmt.Printf("%+v\n", t)
+		y++
+		if y == 9999 {
+			return Zone{}, fmt.Errorf("error: y = 9999") // something is wrong
+		}
+	}
+}
+
+func processZoneYear(z tzdata.ZoneLine, y int, ars []tzdata.RuleLine, offset int64) ([]Transition, int64, bool, int64) {
+	// In the first pass, find occurrences of rules in the current year without any local offsets (the universal time occurrence, utocc).
+	// To find the real occurrence, we need to take into account the rule that is in effect when the transition happens.
+	var transitions []Transition
+	for _, r := range ars {
+		utocc := ruleOccurrenceIn(r, y)
+		transitions = append(transitions, Transition{
+			utoccy: y,
+			utocc:  utocc,
+			Rule:   r,
+			off:    ruleOffset(z, r),
+		})
+	}
+
+	// Sort transitions by their occurrence that year. This allows us to calculate the real occurrence dates by applying
+	// the offset of the active rule.
+	sort.Slice(transitions, func(i, j int) bool {
+		return transitions[i].utocc < transitions[j].utocc
+	})
+
+	// Loop through transitions for this year in the order they occur in.
+	for i, t := range transitions {
+		// Adjust transition occurrences based on the offset of the previous rule.
+		// TODO: This could wrap to past year. Do we need to handle that case separately?
+		t.Occ = t.utocc - offset
+		transitions[i] = t
+
+		// Update offset for next iteration.
+		// TODO: after checking for expiry?
+		offset = t.off
+
+		// Check if Zone expires when this rule is applied.
+		// TODO: Make sure later transitions this year don't make it in the final set.
+		if z.Until.Defined {
+			until := tzexpand.Earliest(z.Until)
+			// TODO: the offset calculation works for my current example but I doubt it is correct
+			until = until - offset + z.Offset.Seconds()
+			if expired := t.Occ > until; expired {
+				// TODO: Add transition to next zone. There can be no gaps.
+				return transitions, offset, true, t.Occ
+			}
 		}
 	}
 
-	return tzif.Data{}, nil
+	return transitions, offset, false, 0
 }
 
-type zone struct {
-	z tzdata.ZoneLine
-
-	expires   bool
-	expiresAt int64
-
-	// * A  zone or continuation line L with a named rule set starts with standard time by
-	//		//   default: that is, any of L's timestamps preceding L's earliest rule use	the
-	//		//   rule in effect after L's first transition into standard time.
-	firstStdTime   transition
-	definesStdTime bool
+type Zone struct {
+	Line tzdata.ZoneLine
 
 	// transitions keeps track of all transitions that occur within this zone.
 	// transitions that never expired are tracked separately as final.
-	transitions []transition
+	Transitions []Transition
+
+	Expires   bool
+	ExpiresAt int64
 
 	// final transitions of the zone that will never expire.
-	final []transition
+	Final []Transition
 }
 
-type transition struct {
-	r      tzdata.RuleLine
+type Transition struct {
+	Rule   tzdata.RuleLine
 	utoccy int
 	utocc  int64
-	occ    int64
+	Occ    int64
 	off    int64
 }
 
