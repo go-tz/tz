@@ -68,7 +68,6 @@ func processZone(f tzdata.File, z tzdata.ZoneLine, activeOffset int64) (Zone, er
 		if validForever(z, ars) {
 			// all active transitions are valid forever.
 			// TODO: Check if there are more rules that might become effective in later years.
-			irz.Final = transitions
 			return irz, nil // reached final ruleset
 		} else {
 			if zoneExpired {

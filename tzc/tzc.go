@@ -61,20 +61,31 @@ func compileZone(f tzdata.File, lines []tzdata.ZoneLine) (tzif.Data, error) {
 		fmt.Println(err)
 	}
 
+	if len(irzs) == 0 {
+		return tzif.Data{}, fmt.Errorf("no zones found")
+	}
+
+	if len(irzs) == 1 && len(irzs[0].Transitions) == 0 {
+		return tzif.Data{}, fmt.Errorf("no transitions found")
+	}
+
 	var b builder
 	b.minimalV1Compliance()
 
-	// Make sure to add designations first. If we first apply the initial designation, we might end up with a different
-	// order of designations than zic.
+	// Make sure we add designations in order of appearance and not in order of occurrence.
+	// This is important because we want to be binary equivalent to the reference implementation zic.
 	for _, z := range irzs {
 		if z.Expires {
 			for _, t := range z.Transitions {
 				b.addDesignation(t.Desig)
 			}
+		} else {
+			// Of the final zone, we only transition to the first rule as the rest is derived from TZ string in the footer.
+			if len(z.Transitions) > 0 {
+				b.addDesignation(z.Transitions[0].Desig)
+			}
 		}
 	}
-
-	// TODO: There is a special case if there are no records except the initial one. In this case, we need to add a dummy transition.
 
 	// Add initial record and adjust first transition.
 	if len(irzs) > 0 && irzs[0].HasStdTransition {
@@ -113,10 +124,17 @@ func compileZone(f tzdata.File, lines []tzdata.ZoneLine) (tzif.Data, error) {
 		}
 	}
 
-	// TODO: Add final transition.
+	// If we only have an initial record but no transitions, we need to add a dummy transition.
+	if len(b.d.V2Data.TransitionTimes) == 0 && len(b.d.V2Data.LocalTimeTypeRecord) == 1 {
+		if len(irzs) > 0 && len(irzs[0].Transitions) > 0 {
+			b.addTransition(irzs[0].Transitions[0])
+		} else {
+			return tzif.Data{}, fmt.Errorf("no transitions found but initial record present")
+		}
+	}
 
-	b.deriveV2HeaderFromData()
 	b.setFooter("TODO")
+	b.deriveV2HeaderFromData()
 
 	return b.Data(), nil
 }
