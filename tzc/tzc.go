@@ -65,10 +65,6 @@ func compileZone(f tzdata.File, lines []tzdata.ZoneLine) (tzif.Data, error) {
 		return tzif.Data{}, fmt.Errorf("no zones found")
 	}
 
-	//if len(irzs) == 1 && len(irzs[0].Transitions) == 0 {
-	//	return tzif.Data{}, fmt.Errorf("no transitions found")
-	//}
-
 	var b builder
 	b.minimalV1Compliance()
 
@@ -88,12 +84,12 @@ func compileZone(f tzdata.File, lines []tzdata.ZoneLine) (tzif.Data, error) {
 	}
 
 	// Add initial record and adjust first transition.
-	if len(irzs) > 0 && irzs[0].HasStdTransition {
-		b.addLocalTimeTypeRecord(irzs[0].FirstStdTransition)
+	if len(irzs) > 0 && irzs[0].HasInitialTransition {
+		b.addLocalTimeTypeRecord(irzs[0].InitialTransition)
 
 		// Apply offset from initial record to first transition occurrence timestamp.
 		if len(irzs) > 0 && len(irzs[0].Transitions) > 0 {
-			irzs[0].Transitions[0].Occ -= irzs[0].FirstStdTransition.Off
+			irzs[0].Transitions[0].Occ -= irzs[0].InitialTransition.Off
 		}
 	} else {
 		return tzif.Data{}, fmt.Errorf("unable to determine initial record")
@@ -114,11 +110,11 @@ func compileZone(f tzdata.File, lines []tzdata.ZoneLine) (tzif.Data, error) {
 			}
 
 			next := irzs[i+1]
-			if !next.HasStdTransition {
+			if !next.HasInitialTransition {
 				return tzif.Data{}, fmt.Errorf("zone without standard time transition: %v", next.Line)
 			}
 
-			f := next.FirstStdTransition // copy
+			f := next.InitialTransition // copy
 			f.Occ = z.ExpiresAt
 			b.addTransition(f)
 		}
@@ -127,6 +123,7 @@ func compileZone(f tzdata.File, lines []tzdata.ZoneLine) (tzif.Data, error) {
 	// If we only have an initial record but no transitions, we need to add a dummy transition.
 	if len(b.d.V2Data.TransitionTimes) == 0 && len(b.d.V2Data.LocalTimeTypeRecord) == 1 {
 		if len(irzs) > 0 && len(irzs[0].Transitions) > 0 {
+			fmt.Println("yep")
 			b.addTransition(irzs[0].Transitions[0])
 		}
 	}

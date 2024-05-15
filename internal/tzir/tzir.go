@@ -38,7 +38,7 @@ func processZone(f tzdata.File, z tzdata.ZoneLine, activeOffset int64) (Zone, er
 		return Zone{
 			Line:        z,
 			Transitions: nil, // there are no transitions in this zone
-			FirstStdTransition: Transition{
+			InitialTransition: Transition{
 				UTOccY: 0,
 				UTOcc:  0,
 				Occ:    0,
@@ -46,7 +46,7 @@ func processZone(f tzdata.File, z tzdata.ZoneLine, activeOffset int64) (Zone, er
 				Dst:    z.Rules.Form == tzdata.ZoneRulesTime,
 				Desig:  designation(z.Format, ""),
 			},
-			HasStdTransition: true,
+			HasInitialTransition: true,
 		}, nil
 	}
 
@@ -70,15 +70,20 @@ func processZone(f tzdata.File, z tzdata.ZoneLine, activeOffset int64) (Zone, er
 
 		irz.Transitions = append(irz.Transitions, transitions...)
 
-		// Remember first transition to standard time. It is used for timestamps prior to the first transition.
-		// This is relevant when there are gaps between zones and for the initial transition.
-		if !irz.HasStdTransition {
+		// Look for the initial transition to standard time. If there is none, look for the first transition to daylight saving time.
+		// It is used for timestamps prior to the first transition. This is relevant when there are gaps between zones and for the initial transition.
+		if !irz.HasInitialTransition || irz.InitialTransition.Dst {
 			for _, t := range transitions {
 				if !t.Dst {
-					irz.FirstStdTransition = t
-					irz.HasStdTransition = true
+					irz.InitialTransition = t
+					irz.HasInitialTransition = true
 					break
 				}
+			}
+			// If there is no initial transition to standard time, use the first transition instead.
+			if !irz.HasInitialTransition && len(transitions) > 0 {
+				irz.InitialTransition = transitions[0]
+				irz.HasInitialTransition = true
 			}
 		}
 
@@ -167,8 +172,10 @@ type Zone struct {
 	// final transitions of the zone that will never expire.
 	Final []Transition
 
-	FirstStdTransition Transition
-	HasStdTransition   bool
+	// InitialTransition is the transition that describes the time prior to this zone becoming active.
+	// It is the first transition to standard time if there are any. Otherwise, it is the first transition to daylight saving time.
+	InitialTransition    Transition
+	HasInitialTransition bool
 }
 
 type Transition struct {
@@ -191,7 +198,7 @@ func designation(format, letter string) string {
 
 func ruleOffset(z tzdata.ZoneLine, r tzdata.RuleLine) int64 {
 	zoff := z.Offset.Seconds()
-	roff := r.Save.TimeOfDay.Seconds()
+	roff := r.Save.Seconds()
 	return zoff + roff
 }
 
