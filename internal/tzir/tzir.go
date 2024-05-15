@@ -6,6 +6,7 @@ import (
 	"github.com/ngrash/go-tz/internal/unixtime"
 	"github.com/ngrash/go-tz/tzdata"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -25,18 +26,6 @@ func Process(f tzdata.File, zs []tzdata.ZoneLine) ([]Zone, error) {
 	}
 
 	return zones, nil
-}
-
-//   - A  zone or continuation line L with a named rule set starts with standard time by
-//     default: that is, any of L's timestamps preceding L's earliest rule use	the
-//     rule in effect after L's first transition into standard time.
-func firstStdTransition(ts []Transition) (Transition, bool) {
-	for _, t := range ts {
-		if t.Rule.Save.Form == tzdata.StandardTime {
-			return t, true
-		}
-	}
-	return Transition{}, false
 }
 
 func processZone(f tzdata.File, z tzdata.ZoneLine, activeOffset int64) (Zone, error) {
@@ -64,6 +53,18 @@ func processZone(f tzdata.File, z tzdata.ZoneLine, activeOffset int64) (Zone, er
 
 		irz.Transitions = append(irz.Transitions, transitions...)
 
+		// Remember first transition to standard time. It is used for timestamps prior to the first transition.
+		// This is relevant when there are gaps between zones and for the initial transition.
+		if !irz.HasStdTransition {
+			for _, t := range transitions {
+				if !t.Dst {
+					irz.FirstStdTransition = t
+					irz.HasStdTransition = true
+					break
+				}
+			}
+		}
+
 		if validForever(z, ars) {
 			// all active transitions are valid forever.
 			// TODO: Check if there are more rules that might become effective in later years.
@@ -87,48 +88,54 @@ func processZone(f tzdata.File, z tzdata.ZoneLine, activeOffset int64) (Zone, er
 func processZoneYear(z tzdata.ZoneLine, y int, ars []tzdata.RuleLine, offset int64) ([]Transition, int64, bool, int64) {
 	// In the first pass, find occurrences of rules in the current year without any local offsets (the universal time occurrence, utocc).
 	// To find the real occurrence, we need to take into account the rule that is in effect when the transition happens.
-	var transitions []Transition
+	var all []Transition
 	for _, r := range ars {
 		utocc := ruleOccurrenceIn(r, y)
-		transitions = append(transitions, Transition{
-			utoccy: y,
-			utocc:  utocc,
+		all = append(all, Transition{
+			UTOccY: y,
+			UTOcc:  utocc,
 			Rule:   r,
-			off:    ruleOffset(z, r),
+			Off:    ruleOffset(z, r),
+			Dst:    r.Save.Form == tzdata.DaylightSavingTime,
+			Desig:  designation(z.Format, r.Letter),
 		})
 	}
 
 	// Sort transitions by their occurrence that year. This allows us to calculate the real occurrence dates by applying
 	// the offset of the active rule.
-	sort.Slice(transitions, func(i, j int) bool {
-		return transitions[i].utocc < transitions[j].utocc
+	sort.Slice(all, func(i, j int) bool {
+		return all[i].UTOcc < all[j].UTOcc
 	})
 
+	// actual transitions that happen during the validity of the zone.
+	var actual []Transition
+
 	// Loop through transitions for this year in the order they occur in.
-	for i, t := range transitions {
+	for _, t := range all {
 		// Adjust transition occurrences based on the offset of the previous rule.
 		// TODO: This could wrap to past year. Do we need to handle that case separately?
-		t.Occ = t.utocc - offset
-		transitions[i] = t
+		t.Occ = t.UTOcc - offset
 
 		// Update offset for next iteration.
 		// TODO: after checking for expiry?
-		offset = t.off
+		offset = t.Off
 
 		// Check if Zone expires when this rule is applied.
-		// TODO: Make sure later transitions this year don't make it in the final set.
 		if z.Until.Defined {
 			until := tzexpand.Earliest(z.Until)
 			// TODO: the offset calculation works for my current example but I doubt it is correct
 			until = until - offset + z.Offset.Seconds()
 			if expired := t.Occ > until; expired {
-				// TODO: Add transition to next zone. There can be no gaps.
-				return transitions, offset, true, t.Occ
+				// Zone expired. Return all transitions that happened before this one.
+				return actual, offset, true, until
 			}
 		}
+
+		// Zone did not expire before this transition, so is actually happens.
+		actual = append(actual, t)
 	}
 
-	return transitions, offset, false, 0
+	return actual, offset, false, 0
 }
 
 type Zone struct {
@@ -143,14 +150,27 @@ type Zone struct {
 
 	// final transitions of the zone that will never expire.
 	Final []Transition
+
+	FirstStdTransition Transition
+	HasStdTransition   bool
 }
 
 type Transition struct {
 	Rule   tzdata.RuleLine
-	utoccy int
-	utocc  int64
+	UTOccY int
+	UTOcc  int64
 	Occ    int64
-	off    int64
+	Off    int64
+	Dst    bool
+	Desig  string
+}
+
+func designation(format, letter string) string {
+	desig := format
+	if strings.Contains(format, "%s") {
+		desig = strings.ReplaceAll(format, "%s", letter)
+	}
+	return desig
 }
 
 func ruleOffset(z tzdata.ZoneLine, r tzdata.RuleLine) int64 {
@@ -199,10 +219,6 @@ func ruleOccurrenceIn(r tzdata.RuleLine, year int) int64 {
 	y, m, d := tzexpand.DayOfMonth(year, r.In, r.On)
 	hours, minutes, seconds := splitTime(time.Duration(r.At.TimeOfDay))
 	return unixtime.FromDateTime(y, int(m), d, hours, minutes, seconds)
-}
-
-func zoneExpiration(z tzdata.ZoneLine) int64 {
-	return tzexpand.Earliest(z.Until) // TODO: add offset
 }
 
 func splitTime(t time.Duration) (int, int, int) {

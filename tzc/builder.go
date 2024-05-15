@@ -2,26 +2,43 @@ package tzc
 
 import (
 	"bytes"
+	"github.com/ngrash/go-tz/internal/tzir"
 	"github.com/ngrash/go-tz/tzif"
-	"strings"
 )
 
 type builder struct {
 	d tzif.Data
 }
 
-func (b *builder) addTransition(t int64) {
-	b.d.V2Data.TransitionTimes = append(b.d.V2Data.TransitionTimes, t)
+func (b *builder) addTransition(t tzir.Transition) {
+	b.d.V2Data.TransitionTimes = append(b.d.V2Data.TransitionTimes, t.Occ)
+	idx := b.addLocalTimeTypeRecord(t)
+	b.d.V2Data.TransitionTypes = append(b.d.V2Data.TransitionTypes, idx)
 }
 
-func (b *builder) addDesignation(format, letter string) uint8 {
-	desig := format
-	if strings.Contains(format, "%s") {
-		desig = strings.ReplaceAll(format, "%s", letter)
+func (b *builder) addLocalTimeTypeRecord(t tzir.Transition) uint8 {
+	lttr := tzif.LocalTimeTypeRecord{
+		Utoff: int32(t.Off),
+		Dst:   t.Dst,
+		Idx:   b.addDesignation(t.Desig),
 	}
+	// Return index of existing record.
+	for i, r := range b.d.V2Data.LocalTimeTypeRecord {
+		if r == lttr {
+			return uint8(i)
+		}
+	}
+	// Append new record and return its index.
+	b.d.V2Data.LocalTimeTypeRecord = append(b.d.V2Data.LocalTimeTypeRecord, lttr)
+	return uint8(len(b.d.V2Data.LocalTimeTypeRecord) - 1)
+}
+
+func (b *builder) addDesignation(desig string) uint8 {
+	// Return index of existing designation.
 	if idx := bytes.Index(b.d.V2Data.TimeZoneDesignation, append([]byte(desig), 0x00)); idx != -1 {
 		return uint8(idx)
 	}
+	// Append new designation and return its index.
 	idx := uint8(len(b.d.V2Data.TimeZoneDesignation))
 	b.d.V2Data.TimeZoneDesignation = append(b.d.V2Data.TimeZoneDesignation, append([]byte(desig), 0x00)...)
 	return idx

@@ -56,21 +56,64 @@ func Compile(f tzdata.File) (map[string]tzif.Data, error) {
 }
 
 func compileZone(f tzdata.File, lines []tzdata.ZoneLine) (tzif.Data, error) {
-	var b builder
-	b.minimalV1Compliance()
-
 	irzs, err := tzir.Process(f, lines)
 	if err != nil {
 		fmt.Println(err)
 	}
 
+	var b builder
+	b.minimalV1Compliance()
+
+	// Make sure to add designations first. If we first apply the initial designation, we might end up with a different
+	// order of designations than zic.
 	for _, z := range irzs {
 		if z.Expires {
 			for _, t := range z.Transitions {
-				b.addTransition(t.Occ)
+				b.addDesignation(t.Desig)
 			}
 		}
 	}
+
+	// TODO: There is a special case if there are no records except the initial one. In this case, we need to add a dummy transition.
+
+	// Add initial record and adjust first transition.
+	if len(irzs) > 0 && irzs[0].HasStdTransition {
+		b.addLocalTimeTypeRecord(irzs[0].FirstStdTransition)
+
+		// Apply offset from initial record to first transition occurrence timestamp.
+		if len(irzs) > 0 && len(irzs[0].Transitions) > 0 {
+			irzs[0].Transitions[0].Occ -= irzs[0].FirstStdTransition.Off
+		}
+	} else {
+		return tzif.Data{}, fmt.Errorf("unable to determine initial record")
+	}
+
+	// Add transitions.
+	for i, z := range irzs {
+		hasContinuation := i != len(irzs)-1
+
+		if z.Expires {
+			for _, t := range z.Transitions {
+				b.addTransition(t)
+			}
+
+			// Add transition to the first standard time rule of the next zone.
+			if !hasContinuation {
+				return tzif.Data{}, fmt.Errorf("final zone must not expire")
+			}
+
+			next := irzs[i+1]
+			if !next.HasStdTransition {
+				return tzif.Data{}, fmt.Errorf("zone without standard time transition: %v", next.Line)
+			}
+
+			f := next.FirstStdTransition // copy
+			f.Occ = z.ExpiresAt
+			b.addTransition(f)
+		}
+	}
+
+	// TODO: Add final transition.
 
 	b.deriveV2HeaderFromData()
 	b.setFooter("TODO")
