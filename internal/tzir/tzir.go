@@ -33,8 +33,25 @@ func processZone(f tzdata.File, z tzdata.ZoneLine, activeOffset int64) (Zone, er
 	// TODO: I remember reading something along "if after applying offsets, the effective rule would change ..."
 	// TODO: Maybe worth to check this out and apply rues for this edge case here.
 
+	if z.Rules.Form == tzdata.ZoneRulesStandard || z.Rules.Form == tzdata.ZoneRulesTime {
+		// Zone has no rules, so it is always in standard time.
+		return Zone{
+			Line:        z,
+			Transitions: nil, // there are no transitions in this zone
+			FirstStdTransition: Transition{
+				UTOccY: 0,
+				UTOcc:  0,
+				Occ:    0,
+				Off:    z.Rules.Time.Seconds() + z.Offset.Seconds(),
+				Dst:    z.Rules.Form == tzdata.ZoneRulesTime,
+				Desig:  designation(z.Format, ""),
+			},
+			HasStdTransition: true,
+		}, nil
+	}
+
 	if z.Rules.Form != tzdata.ZoneRulesName {
-		return Zone{}, fmt.Errorf("can only handle zones with named rules")
+		return Zone{}, fmt.Errorf("cant handle zone rules form %s", z.Rules.Form)
 	}
 
 	rs, err := findRules(f.RuleLines, z.Rules.Name)

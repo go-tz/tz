@@ -65,9 +65,9 @@ func compileZone(f tzdata.File, lines []tzdata.ZoneLine) (tzif.Data, error) {
 		return tzif.Data{}, fmt.Errorf("no zones found")
 	}
 
-	if len(irzs) == 1 && len(irzs[0].Transitions) == 0 {
-		return tzif.Data{}, fmt.Errorf("no transitions found")
-	}
+	//if len(irzs) == 1 && len(irzs[0].Transitions) == 0 {
+	//	return tzif.Data{}, fmt.Errorf("no transitions found")
+	//}
 
 	var b builder
 	b.minimalV1Compliance()
@@ -128,8 +128,6 @@ func compileZone(f tzdata.File, lines []tzdata.ZoneLine) (tzif.Data, error) {
 	if len(b.d.V2Data.TransitionTimes) == 0 && len(b.d.V2Data.LocalTimeTypeRecord) == 1 {
 		if len(irzs) > 0 && len(irzs[0].Transitions) > 0 {
 			b.addTransition(irzs[0].Transitions[0])
-		} else {
-			return tzif.Data{}, fmt.Errorf("no transitions found but initial record present")
 		}
 	}
 
