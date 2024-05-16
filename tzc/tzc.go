@@ -123,7 +123,6 @@ func compileZone(f tzdata.File, lines []tzdata.ZoneLine) (tzif.Data, error) {
 	// If we only have an initial record but no transitions, we need to add a dummy transition.
 	if len(b.d.V2Data.TransitionTimes) == 0 && len(b.d.V2Data.LocalTimeTypeRecord) == 1 {
 		if len(irzs) > 0 && len(irzs[0].Transitions) > 0 {
-			fmt.Println("yep")
 			b.addTransition(irzs[0].Transitions[0])
 		}
 	}

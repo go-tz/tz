@@ -100,8 +100,8 @@ func processZone(f tzdata.File, z tzdata.ZoneLine, activeOffset int64) (Zone, er
 		}
 
 		y++
-		if y == 9999 {
-			return Zone{}, fmt.Errorf("error: y = 9999") // something is wrong
+		if limit := 9999; y == limit {
+			return Zone{}, fmt.Errorf("did not terminate: y = %d", limit)
 		}
 	}
 }
@@ -137,20 +137,17 @@ func processZoneYear(z tzdata.ZoneLine, y int, ars []tzdata.RuleLine, offset int
 		// TODO: This could wrap to past year. Do we need to handle that case separately?
 		t.Occ = t.UTOcc - offset
 
-		// Update offset for next iteration.
-		// TODO: after checking for expiry?
-		offset = t.Off
-
 		// Check if Zone expires when this rule is applied.
 		if z.Until.Defined {
-			until := tzexpand.Earliest(z.Until)
-			// TODO: the offset calculation works for my current example but I doubt it is correct
-			until = until - offset + z.Offset.Seconds()
+			until := tzexpand.Earliest(z.Until) - t.Off + z.Offset.Seconds()
 			if expired := t.Occ > until; expired {
 				// Zone expired. Return all transitions that happened before this one.
 				return actual, offset, true, until
 			}
 		}
+
+		// Update offset for next iteration.
+		offset = t.Off
 
 		// Zone did not expire before this transition, so is actually happens.
 		actual = append(actual, t)
