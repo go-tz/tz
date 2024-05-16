@@ -1,0 +1,25 @@
+# This example is from the man page of zic(8) with the following adjustments:
+# * Link line was commented out because we don't support it yet
+# * Fractional second was commented out because we don't support it yet
+# * Zone name changed from Europe/Zurich to Zurich so that the resulting file structure works with our test harness
+#   which expects a flat structure.
+
+# Rule	 NAME  FROM  TO	   -  IN   ON	    AT	  SAVE	LETTER/S
+Rule	 Swiss 1941  1942  -  May  Mon>=1   1:00  1:00	S
+Rule	 Swiss 1941  1942  -  Oct  Mon>=1   2:00  0	-
+Rule	 EU    1977  1980  -  Apr  Sun>=1   1:00u 1:00	S
+Rule	 EU    1977  only  -  Sep  lastSun  1:00u 0	-
+Rule	 EU    1978  only  -  Oct   1	    1:00u 0	-
+Rule	 EU    1979  1995  -  Sep  lastSun  1:00u 0	-
+Rule	 EU    1981  max   -  Mar  lastSun  1:00u 1:00	S
+Rule	 EU    1996  max   -  Oct  lastSun  1:00u 0	-
+
+# Zone	 NAME		STDOFF	    RULES  FORMAT  [UNTIL]
+Zone	 Zurich	0:34:08	    -	   LMT	   1853 Jul 16
+# Original with fractional second:                    0:29:45.50  -	   BMT	   1894 Jun
+                    0:29:45  -	   BMT	   1894 Jun
+                    1:00	    Swiss  CE%sT   1981
+                    1:00	    EU	   CE%sT
+
+# Link no supported yet:
+#Link	 Europe/Zurich	Europe/Vaduz
