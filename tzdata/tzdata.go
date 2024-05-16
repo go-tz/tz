@@ -189,6 +189,10 @@ type HMS struct {
 	Seconds int
 }
 
+func (hms HMS) String() string {
+	return fmt.Sprintf("%02d:%02d:%02d", hms.Hours, hms.Minutes, hms.Seconds)
+}
+
 func parseLeapLine(fields []string) (LeapLine, error) {
 	if len(fields) != 7 {
 		return LeapLine{}, fmt.Errorf("expected 7 fields, got %d", len(fields))
@@ -382,10 +386,10 @@ type Year int
 
 func (y Year) String() string {
 	if y == MinYear {
-		return "<indefinite past>"
+		return "min"
 	}
 	if y == MaxYear {
-		return "<indefinite future>"
+		return "max"
 	}
 	return strconv.Itoa(int(y))
 }
@@ -403,15 +407,15 @@ type TimeForm int
 func (f TimeForm) String() string {
 	switch f {
 	case WallClock:
-		return "WallClock"
+		return "w"
 	case StandardTime:
-		return "StandardTime"
+		return "s"
 	case DaylightSavingTime:
-		return "DaylightSavingTime"
+		return "d"
 	case UniversalTime:
-		return "UniversalTime"
+		return "u"
 	default:
-		return "<UNDEFINED>"
+		return "<undef>"
 	}
 }
 
@@ -422,12 +426,28 @@ const (
 	UniversalTime
 )
 
+func NewWallClock(d time.Duration) Time {
+	return Time{TimeOfDay: TimeOfDay(d), Form: WallClock}
+}
+
+func NewStandardTime(d time.Duration) Time {
+	return Time{TimeOfDay: TimeOfDay(d), Form: StandardTime}
+}
+
+func NewDaylightSavingTime(d time.Duration) Time {
+	return Time{TimeOfDay: TimeOfDay(d), Form: DaylightSavingTime}
+}
+
+func NewUniversalTime(d time.Duration) Time {
+	return Time{TimeOfDay: TimeOfDay(d), Form: UniversalTime}
+}
+
 // DayForm represents the form of a day in a rule or zone line.
 type DayForm int
 
 func (f DayForm) String() string {
 	switch f {
-	case DayFormDayNum:
+	case DayFormNum:
 		return "DayNum"
 	case DayFormLast:
 		return "Last"
@@ -441,7 +461,7 @@ func (f DayForm) String() string {
 }
 
 const (
-	DayFormDayNum DayForm = iota
+	DayFormNum DayForm = iota
 	DayFormLast
 	DayFormAfter
 	DayFormBefore
@@ -449,8 +469,16 @@ const (
 
 // Time represents a time instance by the duration since 00:00, the start of a calendar day.
 type Time struct {
-	time.Duration
+	TimeOfDay
 	Form TimeForm
+}
+
+func (t Time) String() string {
+	if t.Form == WallClock {
+		// No suffix for wall clock time.
+		return t.TimeOfDay.String()
+	}
+	return t.TimeOfDay.String() + t.Form.String()
 }
 
 // Day represents a day in a rule or zone line.
@@ -458,6 +486,39 @@ type Day struct {
 	Form DayForm
 	Num  int
 	Day  time.Weekday
+}
+
+func NewDayNum(n int) Day {
+	return Day{Form: DayFormNum, Num: n}
+}
+
+func NewDayLast(day time.Weekday) Day {
+	return Day{Form: DayFormLast, Day: day}
+}
+
+func NewDayAfter(n int, day time.Weekday) Day {
+	return Day{Form: DayFormAfter, Num: n, Day: day}
+}
+
+func NewDayBefore(n int, day time.Weekday) Day {
+	return Day{Form: DayFormBefore, Num: n, Day: day}
+}
+
+func (d Day) String() string {
+	if d.Form == DayFormNum {
+		return strconv.Itoa(d.Num)
+	}
+	short := d.Day.String()[0:3]
+	switch d.Form {
+	case DayFormLast:
+		return "last" + short
+	case DayFormAfter:
+		return short + ">=" + strconv.Itoa(d.Num)
+	case DayFormBefore:
+		return short + "<=" + strconv.Itoa(d.Num)
+	default:
+		return "<undef>"
+	}
 }
 
 // RuleLine represents a rule line.
@@ -474,12 +535,12 @@ type RuleLine struct {
 
 // ZoneLine represents a zone line or a continuation line.
 type ZoneLine struct {
-	Continuation bool          // Continuation is true if the line is a continuation line.
-	Name         string        // The NAME field of the zone line. Is empty for continuation lines.
-	Offset       time.Duration // The STDOFF field of the zone line.
-	Rules        ZoneRules     // The RULES field of the zone line.
-	Format       string        // The FORMAT field of the zone line.
-	Until        Until         // The UNTIL field of the zone line.
+	Continuation bool      // Continuation is true if the line is a continuation line.
+	Name         string    // The NAME field of the zone line. Is empty for continuation lines.
+	Offset       TimeOfDay // The STDOFF field of the zone line.
+	Rules        ZoneRules // The RULES field of the zone line.
+	Format       string    // The FORMAT field of the zone line.
+	Until        Until     // The UNTIL field of the zone line.
 }
 
 // parseZoneNAME parses the NAME column of a zone line.
@@ -512,7 +573,7 @@ func parseZoneNAME(s string) (string, error) {
 //	has the same format as the AT and SAVE fields of rule
 //	lines, except without suffix letters; begin the field with
 //	a minus sign if time must be subtracted from UT.
-func parseZoneSTDOFF(s string) (time.Duration, error) {
+func parseZoneSTDOFF(s string) (TimeOfDay, error) {
 	return parseTimeOfDay(s)
 }
 
@@ -528,7 +589,7 @@ func (f ZoneRulesForm) String() string {
 	case ZoneRulesStandard:
 		return "Standard"
 	default:
-		return "<UNDEFINED>"
+		return "<undef>"
 	}
 }
 
@@ -578,6 +639,19 @@ func parseZoneRULES(s string) (ZoneRules, error) {
 	return ZoneRules{Form: ZoneRulesName, Name: s}, nil
 }
 
+func (z ZoneRules) String() string {
+	switch z.Form {
+	case ZoneRulesStandard:
+		return "-"
+	case ZoneRulesName:
+		return z.Name
+	case ZoneRulesTime:
+		return z.Time.String()
+	default:
+		return "<undef>"
+	}
+}
+
 // parseZoneFORMAT parses the FORMAT column of a zone line.
 // It returns an error if the column is invalid according to spec.
 //
@@ -611,7 +685,7 @@ type UntilPartsMask uint8
 
 // Has returns true if all the parts in the mask are set.
 func (p UntilPartsMask) Has(parts UntilPartsMask) bool {
-	return p&parts != 0
+	return p&parts == parts
 }
 
 // Set sets the parts in the mask.
@@ -627,19 +701,19 @@ const (
 	// For example, if UntilTime is set, UntilDay, UntilMonth, and UntilYear are also set.
 	// This is because the spec says that trailing fields can be omitted, and default to the earliest possible value for the missing fields.
 	// The *Only parts are used internally to set the correct parts when parsing the UNTIL column.
-	untilYearOnly UntilPartsMask = 1 << iota
-	untilMonthOnly
-	untilDayOnly
-	untilTimeOnly
+	UntilYearOnly UntilPartsMask = 1 << iota
+	UntilMonthOnly
+	UntilDayOnly
+	UntilTimeOnly
 
 	// UntilYear indicates that Until.Year is defined. This is always set if Until.Defined is true.
-	UntilYear = untilYearOnly
+	UntilYear = UntilYearOnly
 	// UntilMonth indicates that Until.Month is defined.
-	UntilMonth = untilYearOnly | untilMonthOnly
+	UntilMonth = UntilYearOnly | UntilMonthOnly
 	// UntilDay indicates that Until.Day is defined.
-	UntilDay = untilYearOnly | untilMonthOnly | untilDayOnly
+	UntilDay = UntilYearOnly | UntilMonthOnly | UntilDayOnly
 	// UntilTime indicates that Until.Time is defined.
-	UntilTime = untilYearOnly | untilMonthOnly | untilDayOnly | untilTimeOnly
+	UntilTime = UntilYearOnly | UntilMonthOnly | UntilDayOnly | UntilTimeOnly
 )
 
 // Until represents the UNTIL column of a zone line.
@@ -679,6 +753,10 @@ type Until struct {
 //	omitted, and default to the earliest possible value for
 //	the missing fields.
 func parseZoneUNTIL(s string) (Until, error) {
+	return parseUntil(s)
+}
+
+func parseUntil(s string) (Until, error) {
 	if len(s) == 0 {
 		// UNTIL column is optional.
 		return Until{}, nil
@@ -696,7 +774,7 @@ func parseZoneUNTIL(s string) (Until, error) {
 		return u, fmt.Errorf("year: %v", err)
 	}
 	u.Year = year
-	u.Parts = u.Parts.Set(untilYearOnly)
+	u.Parts = u.Parts.Set(UntilYearOnly)
 
 	// Parse month, if present.
 	if len(parts) > 1 {
@@ -705,7 +783,7 @@ func parseZoneUNTIL(s string) (Until, error) {
 			return u, fmt.Errorf("month: %v", err)
 		}
 		u.Month = month
-		u.Parts = u.Parts.Set(untilMonthOnly)
+		u.Parts = u.Parts.Set(UntilMonthOnly)
 	}
 
 	// Parse day, if present.
@@ -715,7 +793,7 @@ func parseZoneUNTIL(s string) (Until, error) {
 			return u, fmt.Errorf("day: %v", err)
 		}
 		u.Day = day
-		u.Parts = u.Parts.Set(untilDayOnly)
+		u.Parts = u.Parts.Set(UntilDayOnly)
 	}
 
 	// Parse time, if present.
@@ -725,12 +803,30 @@ func parseZoneUNTIL(s string) (Until, error) {
 			return u, fmt.Errorf("time: %v", err)
 		}
 		u.Time = t
-		u.Parts = u.Parts.Set(untilTimeOnly)
+		u.Parts = u.Parts.Set(UntilTimeOnly)
 	}
 
 	// If we did not return early, the UNTIL column is defined.
 	u.Defined = true
 	return u, nil
+}
+
+func (u Until) String() string {
+	if !u.Defined {
+		return ""
+	}
+	var parts []string
+	parts = append(parts, strconv.Itoa(u.Year))
+	if u.Parts.Has(UntilMonth) {
+		parts = append(parts, u.Month.String()[0:3])
+	}
+	if u.Parts.Has(UntilDay) {
+		parts = append(parts, u.Day.String())
+	}
+	if u.Parts.Has(UntilTime) {
+		parts = append(parts, u.Time.String())
+	}
+	return strings.Join(parts, " ")
 }
 
 // parseZoneLine parses a zone line.
@@ -778,6 +874,21 @@ func parseZoneLine(fields []string) (ZoneLine, error) {
 		}
 	}
 	return z, errs
+}
+
+func (z ZoneLine) String() string {
+	var cols []string
+	if z.Continuation {
+		cols = append(cols, "")
+	} else {
+		cols = append(cols, "Zone")
+	}
+	cols = append(cols, z.Name)
+	cols = append(cols, z.Offset.String())
+	cols = append(cols, z.Rules.String())
+	cols = append(cols, z.Format)
+	cols = append(cols, z.Until.String())
+	return strings.Join(cols, "\t")
 }
 
 // parseZoneContinuationLine parses a zone continuation line.
@@ -871,6 +982,65 @@ func parseRuleLine(fields []string) (RuleLine, error) {
 		errs = errors.Join(errs, fmt.Errorf("LETTER/S %q: %w", fields[9], err))
 	}
 	return r, errs
+}
+
+func (r RuleLine) String() string {
+	cols := []string{"Rule", r.Name, r.From.String()}
+
+	if r.To == r.From {
+		cols = append(cols, "only")
+	} else {
+		cols = append(cols, r.To.String())
+	}
+
+	cols = append(cols, "-", r.In.String()[:3])
+
+	if r.On.Form == DayFormNum && r.On.Num < 10 {
+		cols = append(cols, " "+r.On.String())
+	} else {
+		cols = append(cols, r.On.String())
+	}
+
+	var atSuffix string
+	switch r.At.Form {
+	case WallClock:
+		atSuffix = ""
+	case StandardTime:
+		atSuffix = "s"
+	case UniversalTime:
+		atSuffix = "u"
+	default:
+		atSuffix = "?"
+	}
+	if time.Duration(r.At.TimeOfDay) < 10*time.Hour {
+		cols = append(cols, " "+r.At.TimeOfDay.String()+atSuffix)
+	} else {
+		cols = append(cols, r.At.TimeOfDay.String()+atSuffix)
+	}
+
+	var saveSuffix string
+	switch r.Save.Form {
+	case StandardTime:
+		saveSuffix = "s"
+	case DaylightSavingTime:
+		saveSuffix = "d"
+	default:
+		saveSuffix = "?"
+	}
+	if r.Save.TimeOfDay == 0 && r.Save.Form == StandardTime {
+		saveSuffix = ""
+	} else if r.Save.TimeOfDay != 0 && r.Save.Form == DaylightSavingTime {
+		saveSuffix = ""
+	}
+	cols = append(cols, r.Save.TimeOfDay.String()+saveSuffix)
+
+	if r.Letter == "" {
+		cols = append(cols, "-")
+	} else {
+		cols = append(cols, r.Letter)
+	}
+
+	return strings.Join(cols, "\t")
 }
 
 // splitLine splits a line according to the spec.
@@ -1116,7 +1286,7 @@ func parseMonth(s string) (time.Month, error) {
 //	in November.
 func parseRuleON(s string) (Day, error) {
 	if n, err := strconv.Atoi(s); err == nil {
-		return Day{Form: DayFormDayNum, Num: n}, nil
+		return Day{Form: DayFormNum, Num: n}, nil
 	}
 	if strings.HasPrefix(s, "last") {
 		day, err := parseWeekday(s[4:])
@@ -1200,7 +1370,7 @@ func parseRuleAT(s string) (Time, error) {
 	default:
 		form = WallClock
 	}
-	return Time{Duration: d, Form: form}, nil
+	return Time{TimeOfDay: d, Form: form}, nil
 }
 
 // parseRuleSAVE parses the SAVE columns of a rule.
@@ -1239,7 +1409,7 @@ func parseRuleSAVE(s string) (Time, error) {
 			form = DaylightSavingTime
 		}
 	}
-	return Time{Duration: d, Form: form}, nil
+	return Time{TimeOfDay: d, Form: form}, nil
 }
 
 // parseRuleLETTERS parses the LETTER/S columns of a rule.
@@ -1264,7 +1434,7 @@ func parseRuleLETTERS(s string) (string, error) {
 	return s, nil
 }
 
-func parseTimeOfDayWithSuffix(timeStr string, suffixes []string) (time.Duration, string, error) {
+func parseTimeOfDayWithSuffix(timeStr string, suffixes []string) (TimeOfDay, string, error) {
 	for _, suffix := range suffixes {
 		if strings.HasSuffix(timeStr, suffix) {
 			woSuffix := strings.TrimSuffix(timeStr, suffix)
@@ -1280,6 +1450,49 @@ func parseTimeOfDayWithSuffix(timeStr string, suffixes []string) (time.Duration,
 		return 0, "", err
 	}
 	return d, "", nil
+}
+
+type TimeOfDay time.Duration
+
+func (td TimeOfDay) Seconds() int64 {
+	return int64(time.Duration(td) / time.Second)
+}
+
+func (td TimeOfDay) String() string {
+	var d = time.Duration(td)
+
+	if d == 0 {
+		return "0"
+	}
+
+	// Handle negative time.
+	isNegative := d < 0
+	if isNegative {
+		d = -d
+	}
+
+	// Calculate hours, minutes, seconds, and fractional seconds.
+	hours := d / time.Hour
+	d -= hours * time.Hour
+	minutes := d / time.Minute
+	d -= minutes * time.Minute
+	seconds := d / time.Second
+	d -= seconds * time.Second
+	fractional := d / time.Millisecond
+
+	// Format the time.
+	var b strings.Builder
+	if isNegative {
+		b.WriteByte('-')
+	}
+	_, _ = fmt.Fprintf(&b, "%d:%02d", hours, minutes)
+	if seconds > 0 || fractional > 0 {
+		_, _ = fmt.Fprintf(&b, ":%02d", seconds)
+	}
+	if fractional > 0 {
+		_, _ = fmt.Fprintf(&b, ".%d", fractional)
+	}
+	return b.String()
 }
 
 // parseTimeOfDay parses the at time of a rule.
@@ -1300,7 +1513,7 @@ func parseTimeOfDayWithSuffix(timeStr string, suffixes []string) (time.Duration,
 //		     260:00       260 hours after 00:00
 //		     -2:30        2.5 hours before 00:00
 //		     -            equivalent to 0
-func parseTimeOfDay(s string) (time.Duration, error) {
+func parseTimeOfDay(s string) (TimeOfDay, error) {
 	if s == "-" {
 		return 0, nil // Equivalent to 0 duration.
 	}
@@ -1365,7 +1578,7 @@ func parseTimeOfDay(s string) (time.Duration, error) {
 		totalDuration = -totalDuration
 	}
 
-	return totalDuration, nil
+	return TimeOfDay(totalDuration), nil
 }
 
 func parseWeekday(s string) (time.Weekday, error) {

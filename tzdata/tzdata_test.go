@@ -36,20 +36,20 @@ Link    Europe/Zurich  Europe/Vaduz
 
 	want := File{
 		RuleLines: []RuleLine{
-			{Name: "Swiss", From: 1941, To: 1942, In: time.May, On: Day{Form: DayFormAfter, Day: time.Monday, Num: 1}, At: Time{Duration: 1 * time.Hour, Form: WallClock}, Save: Time{Duration: 1 * time.Hour, Form: DaylightSavingTime}, Letter: "S"},
-			{Name: "Swiss", From: 1941, To: 1942, In: time.October, On: Day{Form: DayFormAfter, Day: time.Monday, Num: 1}, At: Time{Duration: 2 * time.Hour, Form: WallClock}, Save: Time{Duration: 0, Form: StandardTime}, Letter: ""},
-			{Name: "EU", From: 1977, To: 1980, In: time.April, On: Day{Form: DayFormAfter, Day: time.Sunday, Num: 1}, At: Time{Duration: 1 * time.Hour, Form: UniversalTime}, Save: Time{Duration: 1 * time.Hour, Form: DaylightSavingTime}, Letter: "S"},
-			{Name: "EU", From: 1977, To: 1977, In: time.September, On: Day{Form: DayFormLast, Day: time.Sunday}, At: Time{Duration: 1 * time.Hour, Form: UniversalTime}, Save: Time{Duration: 0, Form: StandardTime}, Letter: ""},
-			{Name: "EU", From: 1978, To: 1978, In: time.October, On: Day{Form: DayFormDayNum, Num: 1}, At: Time{Duration: 1 * time.Hour, Form: UniversalTime}, Save: Time{Duration: 0, Form: StandardTime}, Letter: ""},
-			{Name: "EU", From: 1979, To: 1995, In: time.September, On: Day{Form: DayFormLast, Day: time.Sunday}, At: Time{Duration: 1 * time.Hour, Form: UniversalTime}, Save: Time{Duration: 0, Form: StandardTime}, Letter: ""},
-			{Name: "EU", From: 1981, To: MaxYear, In: time.March, On: Day{Form: DayFormLast, Day: time.Sunday}, At: Time{Duration: 1 * time.Hour, Form: UniversalTime}, Save: Time{Duration: 1 * time.Hour, Form: DaylightSavingTime}, Letter: "S"},
-			{Name: "EU", From: 1996, To: MaxYear, In: time.October, On: Day{Form: DayFormLast, Day: time.Sunday}, At: Time{Duration: 1 * time.Hour, Form: UniversalTime}, Save: Time{Duration: 0, Form: StandardTime}, Letter: ""},
+			{Name: "Swiss", From: 1941, To: 1942, In: time.May, On: Day{Form: DayFormAfter, Day: time.Monday, Num: 1}, At: Time{TimeOfDay(1 * time.Hour), WallClock}, Save: Time{TimeOfDay(1 * time.Hour), DaylightSavingTime}, Letter: "S"},
+			{Name: "Swiss", From: 1941, To: 1942, In: time.October, On: Day{Form: DayFormAfter, Day: time.Monday, Num: 1}, At: Time{TimeOfDay(2 * time.Hour), WallClock}, Save: Time{TimeOfDay(0), StandardTime}, Letter: ""},
+			{Name: "EU", From: 1977, To: 1980, In: time.April, On: Day{Form: DayFormAfter, Day: time.Sunday, Num: 1}, At: Time{TimeOfDay(1 * time.Hour), UniversalTime}, Save: Time{TimeOfDay(1 * time.Hour), DaylightSavingTime}, Letter: "S"},
+			{Name: "EU", From: 1977, To: 1977, In: time.September, On: Day{Form: DayFormLast, Day: time.Sunday}, At: Time{TimeOfDay(1 * time.Hour), UniversalTime}, Save: Time{TimeOfDay(0), StandardTime}, Letter: ""},
+			{Name: "EU", From: 1978, To: 1978, In: time.October, On: Day{Form: DayFormNum, Num: 1}, At: Time{TimeOfDay(1 * time.Hour), UniversalTime}, Save: Time{TimeOfDay(0), StandardTime}, Letter: ""},
+			{Name: "EU", From: 1979, To: 1995, In: time.September, On: Day{Form: DayFormLast, Day: time.Sunday}, At: Time{TimeOfDay(1 * time.Hour), UniversalTime}, Save: Time{TimeOfDay(0), StandardTime}, Letter: ""},
+			{Name: "EU", From: 1981, To: MaxYear, In: time.March, On: Day{Form: DayFormLast, Day: time.Sunday}, At: Time{TimeOfDay(1 * time.Hour), UniversalTime}, Save: Time{TimeOfDay(1 * time.Hour), DaylightSavingTime}, Letter: "S"},
+			{Name: "EU", From: 1996, To: MaxYear, In: time.October, On: Day{Form: DayFormLast, Day: time.Sunday}, At: Time{TimeOfDay(1 * time.Hour), UniversalTime}, Save: Time{TimeOfDay(0), StandardTime}, Letter: ""},
 		},
 		ZoneLines: []ZoneLine{
-			{Name: "Europe/Zurich", Continuation: false, Offset: 34*time.Minute + 8*time.Second, Rules: ZoneRules{Form: ZoneRulesStandard}, Format: "LMT", Until: Until{Defined: true, Year: 1853, Month: time.July, Day: Day{Form: DayFormDayNum, Num: 16}, Parts: UntilDay}},
-			{Name: "", Continuation: true, Offset: 29*time.Minute + 45*time.Second + 500*time.Millisecond, Rules: ZoneRules{Form: ZoneRulesStandard}, Format: "BMT", Until: Until{Defined: true, Year: 1894, Month: time.June, Parts: UntilMonth}},
-			{Name: "", Continuation: true, Offset: 1 * time.Hour, Rules: ZoneRules{Form: ZoneRulesName, Name: "Swiss"}, Format: "CE%sT", Until: Until{Defined: true, Year: 1981, Parts: UntilYear}},
-			{Name: "", Continuation: true, Offset: 1 * time.Hour, Rules: ZoneRules{Form: ZoneRulesName, Name: "EU"}, Format: "CE%sT", Until: Until{Defined: false}},
+			{Name: "Europe/Zurich", Continuation: false, Offset: TimeOfDay(34*time.Minute + 8*time.Second), Rules: ZoneRules{Form: ZoneRulesStandard}, Format: "LMT", Until: Until{Defined: true, Year: 1853, Month: time.July, Day: Day{Form: DayFormNum, Num: 16}, Parts: UntilDay}},
+			{Name: "", Continuation: true, Offset: TimeOfDay(29*time.Minute + 45*time.Second + 500*time.Millisecond), Rules: ZoneRules{Form: ZoneRulesStandard}, Format: "BMT", Until: Until{Defined: true, Year: 1894, Month: time.June, Parts: UntilMonth}},
+			{Name: "", Continuation: true, Offset: TimeOfDay(1 * time.Hour), Rules: ZoneRules{Form: ZoneRulesName, Name: "Swiss"}, Format: "CE%sT", Until: Until{Defined: true, Year: 1981, Parts: UntilYear}},
+			{Name: "", Continuation: true, Offset: TimeOfDay(1 * time.Hour), Rules: ZoneRules{Form: ZoneRulesName, Name: "EU"}, Format: "CE%sT", Until: Until{Defined: false}},
 		},
 		LinkLines: []LinkLine{
 			{From: "Europe/Zurich", To: "Europe/Vaduz"},
@@ -80,5 +80,28 @@ Expires  2020  Dec    28   00:00:00
 	}
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("Parse() mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestParseUntil(t *testing.T) {
+	cases := []struct {
+		input string
+		want  Until
+	}{
+		{"1981", Until{Defined: true, Year: 1981, Parts: UntilYear}},
+		{"1981 Mar", Until{Defined: true, Year: 1981, Month: time.March, Parts: UntilMonth}},
+		{"1981 Mar lastSun", Until{Defined: true, Year: 1981, Month: time.March, Day: Day{Form: DayFormLast, Day: time.Sunday}, Parts: UntilDay}},
+		{"1981 Mar lastSun 1:00u", Until{Defined: true, Year: 1981, Month: time.March, Day: Day{Form: DayFormLast, Day: time.Sunday}, Time: Time{TimeOfDay(1 * time.Hour), UniversalTime}, Parts: UntilTime}},
+		{"1981 Mar lastSun 1:00u", Until{Defined: true, Year: 1981, Month: time.March, Day: Day{Form: DayFormLast, Day: time.Sunday}, Time: Time{TimeOfDay(1 * time.Hour), UniversalTime}, Parts: UntilTime}},
+	}
+
+	for _, c := range cases {
+		got, err := parseUntil(c.input)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if diff := cmp.Diff(c.want, got); diff != "" {
+			t.Errorf("ParseUntil(%q) mismatch (-want +got):\n%s", c.input, diff)
+		}
 	}
 }
