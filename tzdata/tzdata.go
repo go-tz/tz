@@ -1,5 +1,5 @@
-// Package tzdata provides a parser for the tzdata and leapsecond files provided by IANA
-// at https://www.iana.org/time-zones.
+// Package tzdata provides a parser for the tzdata and leapsecond files
+// provided by IANA at https://www.iana.org/time-zones.
 package tzdata
 
 import (
@@ -13,130 +13,142 @@ import (
 	"time"
 )
 
-// File represents the result of parsing a tzdata or leapsecond file.
-// It contains the parsed zone lines, rule lines, and link lines, each in the order they appear in the file.
-// It also contains the parsed leap lines and expires lines, if the file is a leapsecond file.
-// The data structure is shared between the two file types, but the leap lines and expires lines are only
-// present in leapsecond files while the zone lines, rule lines, and link lines are only present in tzdata files.
-type File struct {
-	ZoneLines    []ZoneLine
-	RuleLines    []RuleLine
-	LinkLines    []LinkLine
-	LeapLines    []LeapLine
-	ExpiresLines []ExpiresLine
+// Line is a common interface for all line types in this package.
+type Line interface {
+	// isLine is a marker method that marks a type as a Line.
+	isLine()
+
+	// LineNum returns the line number of the line in the file.
+	LineNum() int
+
+	// LineText returns the text of the line in the file.
+	LineText() string
 }
 
-// parseError is an error that occurred during parsing.
-// It contains the line number and the line where the error occurred.
-type parseError struct {
-	lineNumber int
-	line       string
-	err        error
+func (RuleLine) isLine()    {}
+func (ZoneLine) isLine()    {}
+func (LinkLine) isLine()    {}
+func (LeapLine) isLine()    {}
+func (ExpiresLine) isLine() {}
+
+// lineInFile helps lines implement the Line interface.
+type lineInFile struct {
+	lineNum  int
+	lineText string
 }
 
-// Error returns a string representation of the parse error, implementing the error interface.
-func (e *parseError) Error() string {
-	return fmt.Sprintf("line %d: %q: %v", e.lineNumber, e.line, e.err)
+// LineNum returns the line number of the line in the file.
+func (l lineInFile) LineNum() int {
+	return l.lineNum
 }
 
-// zoneContinuationParseError returns a parse error for a zone continuation line.
-func zoneContinuationParseError(lineNumber int, line string, err error) error {
-	return &parseError{lineNumber, line, fmt.Errorf("parse zone continuation: %w", err)}
+// LineText returns the text of the line in the file.
+func (l lineInFile) LineText() string {
+	return l.lineText
 }
 
-// zoneParseError returns a parse error for a zone line.
-func zoneParseError(lineNumber int, line string, err error) error {
-	return &parseError{lineNumber, line, fmt.Errorf("parse zone: %w", err)}
+// ParseError is an error that occurred while parsing a file.
+type ParseError struct {
+	Source lineInFile
+	Nested error
 }
 
-// ruleParseError returns a parse error for a rule line.
-func ruleParseError(lineNumber int, line string, err error) error {
-	return &parseError{lineNumber, line, fmt.Errorf("parse rule: %w", err)}
+func newParseError(source lineInFile, err error) error {
+	if err == nil {
+		return nil
+	}
+	if errors.As(err, &ParseError{}) {
+		return err // already wrapped
+	}
+	return ParseError{Source: source, Nested: err}
 }
 
-// linkParseError returns a parse error for a link line.
-func linkParseError(lineNumber int, line string, err error) error {
-	return &parseError{lineNumber, line, fmt.Errorf("parse link: %w", err)}
+// Error implements the error interface.
+func (e ParseError) Error() string {
+	return fmt.Sprintf("parsing line %d: %q: %v", e.Source.lineNum, e.Source.lineText, e.Nested)
 }
 
-// leapParseError returns a parse error for a leap line.
-func leapParseError(lineNumber int, line string, err error) error {
-	return &parseError{lineNumber, line, fmt.Errorf("parse leap: %w", err)}
+// Scanner is a scanner for tzdata and leapsecond files.
+// It reads lines from an io.Reader and parses them into Line values.
+type Scanner struct {
+	scanner *bufio.Scanner
+
+	lineNumber               int
+	zoneContinuationExpected bool
+
+	line Line
+	err  error
 }
 
-// expiresParseError returns a parse error for an expires line.
-func expiresParseError(lineNumber int, line string, err error) error {
-	return &parseError{lineNumber, line, fmt.Errorf("parse expires: %w", err)}
+// NewScanner creates a new Scanner that reads from r.
+func NewScanner(r io.Reader) *Scanner {
+	return &Scanner{scanner: bufio.NewScanner(r)}
 }
 
-// Parse parses the content of tzdata file and returns a File struct containing the parsed lines.
-func Parse(r io.Reader) (File, error) {
-	var result File
-	scanner := bufio.NewScanner(r)
-
-	var (
-		lineNumber           int
-		continuationExpected bool
-	)
-	for scanner.Scan() {
-		lineNumber++
-		line := scanner.Text()
+// Scan reads the next line from the input.
+// It returns true if a line was read, false if the end of the input was reached
+// or an error occurred. Use Err to check for an error.
+// If Scan returns true, the Line method will return the parsed line.
+// If Scan returns false, the Err method will return the error or nil if the
+// end of the input was reached.
+func (s *Scanner) Scan() bool {
+	for s.scanner.Scan() {
+		s.lineNumber++
+		line := s.scanner.Text()
+		source := lineInFile{lineNum: s.lineNumber, lineText: line}
 		fields, err := splitLine(line)
 		if err != nil {
-			return result, err
+			s.err = err
+			return false
 		}
 		if fields == nil {
 			continue // skip comment or empty line
 		}
-		if strings.HasPrefix(line, "Zone") || continuationExpected {
+		switch {
+		case strings.HasPrefix(line, "Zone") || s.zoneContinuationExpected:
 			var zone ZoneLine
-			if continuationExpected {
-				zone, err = parseZoneContinuationLine(fields)
-				if err != nil {
-					return result, zoneContinuationParseError(lineNumber, line, err)
-				}
+			if s.zoneContinuationExpected {
+				zone, s.err = parseZoneContinuationLine(fields)
 			} else {
-				zone, err = parseZoneLine(fields)
-				if err != nil {
-					return result, zoneParseError(lineNumber, line, err)
-				}
+				zone, s.err = parseZoneLine(source, fields)
 			}
-			result.ZoneLines = append(result.ZoneLines, zone)
+			s.line = zone
 			// If the UNTIL column is defined, we expect a continuation line to follow.
-			continuationExpected = zone.Until.Defined
-		} else if strings.HasPrefix(line, "Rule") {
-			rule, err := parseRuleLine(fields)
-			if err != nil {
-				return result, ruleParseError(lineNumber, line, err)
-			}
-			result.RuleLines = append(result.RuleLines, rule)
-		} else if strings.HasPrefix(line, "Link") {
-			link, err := parseLinkLine(fields)
-			if err != nil {
-				return result, linkParseError(lineNumber, line, err)
-			}
-			result.LinkLines = append(result.LinkLines, link)
-		} else if strings.HasPrefix(line, "Leap") {
-			leap, err := parseLeapLine(fields)
-			if err != nil {
-				return result, leapParseError(lineNumber, line, err)
-			}
-			result.LeapLines = append(result.LeapLines, leap)
-		} else if strings.HasPrefix(line, "Expires") {
-			expires, err := parseExpiresLine(fields)
-			if err != nil {
-				return result, expiresParseError(lineNumber, line, err)
-			}
-			result.ExpiresLines = append(result.ExpiresLines, expires)
-		} else {
-			return result, &parseError{lineNumber, line, fmt.Errorf("unexpected line")}
+			s.zoneContinuationExpected = zone.Until.Defined
+		case strings.HasPrefix(line, "Rule"):
+			s.line, s.err = parseRuleLine(source, fields)
+		case strings.HasPrefix(line, "Link"):
+			s.line, s.err = parseLinkLine(source, fields)
+		case strings.HasPrefix(line, "Leap"):
+			s.line, s.err = parseLeapLine(source, fields)
+		case strings.HasPrefix(line, "Expires"):
+			s.line, s.err = parseExpiresLine(source, fields)
+		default:
+			s.err = errors.New("unknown line type")
 		}
-	}
 
-	if err := scanner.Err(); err != nil {
-		return result, fmt.Errorf("scanner: %w", err)
+		if s.err != nil {
+			s.line = nil // clear line on error
+			s.err = newParseError(source, s.err)
+			return false
+		}
+		return true
 	}
-	return result, nil
+	s.line = nil // clear line at EOF
+	s.err = s.scanner.Err()
+	return false
+}
+
+// Err returns the first error that was encountered by the scanner.
+func (s *Scanner) Err() error {
+	return s.err
+}
+
+// Line returns the last line that was read by the scanner.
+// If Scan returned true, Line is guaranteed to be either
+// a ZoneLine, RuleLine, LinkLine, LeapLine, or ExpiresLine.
+func (s *Scanner) Line() Line {
+	return s.line
 }
 
 // LeapCorr represents the correction direction of a leap second.
@@ -151,6 +163,7 @@ const (
 
 // LeapLine represents a leap line.
 type LeapLine struct {
+	lineInFile
 	Year  int          // YEAR column
 	Month time.Month   // MONTH column
 	Day   int          // DAY column
@@ -189,7 +202,7 @@ type HMS struct {
 	Seconds int
 }
 
-func parseLeapLine(fields []string) (LeapLine, error) {
+func parseLeapLine(source lineInFile, fields []string) (LeapLine, error) {
 	if len(fields) != 7 {
 		return LeapLine{}, fmt.Errorf("expected 7 fields, got %d", len(fields))
 	}
@@ -197,7 +210,7 @@ func parseLeapLine(fields []string) (LeapLine, error) {
 		return LeapLine{}, fmt.Errorf("expected 'Leap', got %q", fields[0])
 	}
 	var (
-		leap LeapLine
+		leap = LeapLine{lineInFile: source}
 		errs error
 		err  error
 	)
@@ -287,6 +300,7 @@ func parseHMS(s string) (HMS, error) {
 
 // ExpiresLine represents an expires line.
 type ExpiresLine struct {
+	lineInFile
 	Year  int
 	Month time.Month
 	Day   int
@@ -294,7 +308,7 @@ type ExpiresLine struct {
 }
 
 // parseExpiresLine parses an expires line.
-func parseExpiresLine(fields []string) (ExpiresLine, error) {
+func parseExpiresLine(source lineInFile, fields []string) (ExpiresLine, error) {
 	if len(fields) != 5 {
 		return ExpiresLine{}, fmt.Errorf("expected 5 fields, got %d", len(fields))
 	}
@@ -302,7 +316,7 @@ func parseExpiresLine(fields []string) (ExpiresLine, error) {
 		return ExpiresLine{}, fmt.Errorf("expected 'Expires', got %q", fields[0])
 	}
 	var (
-		expires ExpiresLine
+		expires = ExpiresLine{lineInFile: source}
 		errs    error
 		err     error
 	)
@@ -343,6 +357,7 @@ func parseExpiresHHMMSS(s string) (HMS, error) {
 
 // LinkLine represents a link line.
 type LinkLine struct {
+	lineInFile
 	From string
 	To   string
 }
@@ -367,14 +382,14 @@ type LinkLine struct {
 //	 or more links does not terminate in a Zone name.  A link line can
 //	 appear before the line that defines the link target.  For
 //	 example:
-func parseLinkLine(parts []string) (LinkLine, error) {
+func parseLinkLine(source lineInFile, parts []string) (LinkLine, error) {
 	if len(parts) != 3 {
 		return LinkLine{}, fmt.Errorf("expected 3 fields, got %d", len(parts))
 	}
 	if parts[0] != "Link" {
 		return LinkLine{}, fmt.Errorf("expected 'Link', got %q", parts[0])
 	}
-	return LinkLine{From: parts[1], To: parts[2]}, nil
+	return LinkLine{lineInFile: source, From: parts[1], To: parts[2]}, nil
 }
 
 // Year represents a year in the proleptic Gregorian calendar.
@@ -462,6 +477,7 @@ type Day struct {
 
 // RuleLine represents a rule line.
 type RuleLine struct {
+	lineInFile
 	Name   string     // The NAME field of the rule line.
 	From   Year       // The FROM field of the rule line.
 	To     Year       // The TO field of the rule line.
@@ -474,6 +490,7 @@ type RuleLine struct {
 
 // ZoneLine represents a zone line or a continuation line.
 type ZoneLine struct {
+	lineInFile
 	Continuation bool          // Continuation is true if the line is a continuation line.
 	Name         string        // The NAME field of the zone line. Is empty for continuation lines.
 	Offset       time.Duration // The STDOFF field of the zone line.
@@ -744,7 +761,7 @@ func parseZoneUNTIL(s string) (Until, error) {
 //	 For example:
 //
 //			    Zone  Asia/Amman  2:00    Jordan  EE%sT   2017 Oct 27 01:00
-func parseZoneLine(fields []string) (ZoneLine, error) {
+func parseZoneLine(source lineInFile, fields []string) (ZoneLine, error) {
 	if len(fields) < 5 {
 		return ZoneLine{}, fmt.Errorf("expected at least 5 fields, got %d", len(fields))
 	}
@@ -755,7 +772,7 @@ func parseZoneLine(fields []string) (ZoneLine, error) {
 		return ZoneLine{}, fmt.Errorf("expected 'Zone', got %q", fields[0])
 	}
 	var (
-		z    ZoneLine
+		z    = ZoneLine{lineInFile: source}
 		errs error
 		err  error
 	)
@@ -834,7 +851,7 @@ func parseZoneContinuationLine(fields []string) (ZoneLine, error) {
 //	For example:
 //
 //	    Rule  US    1967  1973  -  Apr  lastSun  2:00w  1:00d  D
-func parseRuleLine(fields []string) (RuleLine, error) {
+func parseRuleLine(source lineInFile, fields []string) (RuleLine, error) {
 	if len(fields) != 10 {
 		return RuleLine{}, fmt.Errorf("expected 10 fields, got %d", len(fields))
 	}
@@ -842,7 +859,7 @@ func parseRuleLine(fields []string) (RuleLine, error) {
 		return RuleLine{}, fmt.Errorf("expected 'Rule', got %q", fields[0])
 	}
 	var (
-		r    RuleLine
+		r    = RuleLine{lineInFile: source}
 		errs error
 		err  error
 	)
