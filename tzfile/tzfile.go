@@ -1,6 +1,6 @@
-// Package tzdata provides a parser for the tzdata and leapsecond files
+// Package tzfile provides a parser for the tzdb and leapsecond files
 // provided by IANA at https://www.iana.org/time-zones.
-package tzdata
+package tzfile
 
 import (
 	"bufio"

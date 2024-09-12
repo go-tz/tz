@@ -1,4 +1,4 @@
-package ianadata
+package ianatz
 
 import (
 	"bytes"

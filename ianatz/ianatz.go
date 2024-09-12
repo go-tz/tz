@@ -1,4 +1,4 @@
-// Package ianadata downloads and unpacks the IANA time zone database from
+// Package ianatz downloads and unpacks the IANA time zone database from
 // https://data.iana.org/time-zones/.
 //
 // Clients are advised to cache the ETags returned in this package and pass
@@ -6,7 +6,7 @@
 // the same data multiple times.
 // Read more about etag caching at
 // https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/ETag.
-package ianadata
+package ianatz
 
 import (
 	"archive/tar"
