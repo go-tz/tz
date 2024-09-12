@@ -2,9 +2,10 @@ package tzif
 
 import (
 	"bytes"
-	"github.com/google/go-cmp/cmp"
 	"strings"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
 )
 
 func TestHeader_Write(t *testing.T) {
