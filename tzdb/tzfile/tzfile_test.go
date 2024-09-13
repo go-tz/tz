@@ -88,7 +88,7 @@ Expires  2020  Dec    28   00:00:00
 }
 
 func TestIANADataIntegration(t *testing.T) {
-	data, err := os.ReadFile("../testdata/tzdata-2024b.tar.gz")
+	data, err := os.ReadFile("../../testdata/tzdata-2024b.tar.gz")
 	if err != nil {
 		t.Fatal("failed to read test data file:", err)
 	}

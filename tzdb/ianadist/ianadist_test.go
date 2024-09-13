@@ -38,7 +38,7 @@ func testTZDataFiles(t *testing.T, files TZDataFiles) {
 // mustReadTestData reads the testdata file and returns its contents.
 func mustReadTestData(t *testing.T) []byte {
 	t.Helper()
-	data, err := os.ReadFile("../testdata/tzdata-2024b.tar.gz")
+	data, err := os.ReadFile("../../testdata/tzdata-2024b.tar.gz")
 	if err != nil {
 		t.Fatalf("failed to read testdata: %v", err)
 	}
