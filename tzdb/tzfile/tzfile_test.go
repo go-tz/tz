@@ -10,7 +10,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 
-	"github.com/ngrash/go-tz/ianatz"
+	"github.com/ngrash/go-tz/tzdb/ianadist"
 )
 
 func TestScanner_ExtendedExample(t *testing.T) {
@@ -93,7 +93,7 @@ func TestIANADataIntegration(t *testing.T) {
 		t.Fatal("failed to read test data file:", err)
 	}
 
-	files, err := ianatz.ReadArchive(bytes.NewReader(data))
+	files, err := ianadist.ReadArchive(bytes.NewReader(data))
 	if err != nil {
 		t.Fatal("failed to read tzdata archive:", err)
 	}

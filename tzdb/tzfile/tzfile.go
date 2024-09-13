@@ -1,5 +1,10 @@
-// Package tzfile provides a parser for the tzdb and leapsecond files
-// provided by IANA at https://www.iana.org/time-zones.
+// Package tzfile parses tzdb files.
+//
+// The format of the files is described in the [zic(8)] manual page
+// which is quoted liberally in this package's documentation.
+// The manual itself is in the public domain.
+//
+// [zic(8)]: https://data.iana.org/time-zones/code/zic.8.txt
 package tzfile
 
 import (

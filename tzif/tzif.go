@@ -1,17 +1,18 @@
-// Package tzif implements the Time Zone Information Format (TZif)
-// as described in RFC 8536.
+// Package tzif implements the Time Zone Information Format (TZif).
+// The format is described in [RFC 8536] and the [tzfile(5) manual page].
 //
-// The content of this package references and incorporates text and concepts
-// derived from RFC 8536, which is available at
-// https://datatracker.ietf.org/doc/html/rfc8536.
+// Portions of this package are based on material from [RFC 8536],
+// © IETF Trust and the persons identified as the document authors.
+// The unmodified original document is included in the docs directory
+// for reference.
 //
-// Portions of this implementation are based on material from RFC 8536,
-// © IETF Trust and the persons identified as the document authors. The original
-// document can be accessed at the IETF website.
+// Redistribution of [RFC 8536] and use in source and binary forms, with or
+// without modification, are permitted under the terms of the IETF Trust License
+// as described in [IETF License Info].
 //
-// Redistribution and use in source and binary forms, with or without modification,
-// are permitted under the terms of the IETF Trust License as described in:
-// https://trustee.ietf.org/license-info.
+// [RFC 8536]: https://datatracker.ietf.org/doc/html/rfc8536
+// [tzfile(5) manual page]: https://data.iana.org/time-zones/data/tzfile.5.txt
+// [IETF License Info]: https://trustee.ietf.org/license-info
 package tzif
 
 import (

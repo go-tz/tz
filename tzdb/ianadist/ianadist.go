@@ -1,12 +1,12 @@
-// Package ianatz downloads and unpacks the IANA time zone database from
-// https://data.iana.org/time-zones/.
+// Package ianadist downloads and extracts tzdb files distributed by IANA.
 //
-// Clients are advised to cache the ETags returned in this package and pass
-// them to subsequent calls, to avoid wasting resources by downloading
-// the same data multiple times.
-// Read more about etag caching at
-// https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/ETag.
-package ianatz
+// Releases are downloaded from the [IANA data server]. Clients are advised
+// to store the [ETags] returned in this package and pass them to subsequent
+// calls to avoid downloading the same data multiple times.
+//
+// [ETags]: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/ETag
+// [IANA data server]: https://www.iana.org/time-zones
+package ianadist
 
 import (
 	"archive/tar"

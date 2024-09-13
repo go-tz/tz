@@ -1,4 +1,4 @@
-package ianatz
+package ianadist
 
 import (
 	"bytes"
