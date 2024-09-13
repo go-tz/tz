@@ -1,4 +1,4 @@
-module github.com/ngrash/go-tz
+module github.com/go-tz/tz
 
 go 1.22
 

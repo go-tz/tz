@@ -7,7 +7,8 @@ import (
 	"os"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/ngrash/go-tz/tzif"
+
+	"github.com/go-tz/tz/tzif"
 )
 
 func main() {

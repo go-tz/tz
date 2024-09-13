@@ -10,7 +10,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 
-	"github.com/ngrash/go-tz/tzdb/ianadist"
+	"github.com/go-tz/tz/tzdb/ianadist"
 )
 
 func TestScanner_ExtendedExample(t *testing.T) {

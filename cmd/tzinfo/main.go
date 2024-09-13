@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ngrash/go-tz/tzif"
+	"github.com/go-tz/tz/tzif"
 )
 
 var (
