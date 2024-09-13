@@ -1,11 +1,15 @@
 # Go packages for the IANA time zone database
-This repository contains a Go module with packages for working with the [IANA time zone database](https://en.wikipedia.org/wiki/Tz_database) (tzdb), about which Wikipedia says:
+This repository contains a Go module and packages for working with the [IANA time zone database](https://en.wikipedia.org/wiki/Tz_database) (tzdb), about which Wikipedia says:
 
 > The tz database is a collaborative compilation of information about the world's time zones and rules for observing daylight saving time,
 > primarily intended for use with computer programs and operating systems.
 > Paul Eggert has been its editor and maintainer since 2005, with the organizational backing of ICANN.
 > The tz database is also known as tzdata, the zoneinfo database or the IANA time zone database (after the Internet Assigned Numbers Authority),
 > and occasionally as the Olson database, referring to the founding contributor, Arthur David Olson.
+
+## API stability
+At this time, there is no guarantee of API stability. 
+The packages in this repository are still under development and may change significantly in the future.
 
 ## Roadmap
 
